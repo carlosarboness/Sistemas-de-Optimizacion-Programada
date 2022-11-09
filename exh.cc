@@ -1,6 +1,9 @@
 #include <iostream>
 #include <vector>
 #include <climits>
+#include <chrono>
+#include <iomanip>
+using namespace std::chrono;
 using namespace std;
 
 using VI = vector<int>;
@@ -11,15 +14,33 @@ struct Class
   VI imp; // improvements
 };
 
+void write_solution(const VI &best_sol, int pen, double time)
+{
+  cout << pen << " " << setprecision(1) << time << endl;
+  bool primer = true;
+  for (auto &s : best_sol)
+  {
+    if (primer)
+      primer = false;
+    else
+      cout << " ";
+    cout << s;
+  }
+  cout << endl;
+}
+
 void exh_rec(int i, int current_pen, int min_pen, VI &best_sol, VI &cars_left,
-             const VI &ce, const VI &ne, const vector<Class> &classes)
+             const VI &ce, const VI &ne, const vector<Class> &classes, const auto &start)
 {
   int C = best_sol.size();
   int K = classes.size();
   if (current_pen >= min_pen)
     return;
   if (i == C)
-    write_solution(best_sol);
+  {
+    auto now = high_resolution_clock::now();
+    write_solution(best_sol, current_pen, now - start);
+  }
   else
   {
     for (int j = 0; j < K; ++j)
@@ -42,7 +63,8 @@ void exh(int C, const VI &ce, const VI &ne, const vector<Class> &classes)
   VI cars_left(K);
   for (int i = 0; i < K; ++i)
     cars_left[i] = classes[i].n;
-  exh_rec(0, 0, INT_MAX, best_sol, cars_left, ce, ne, classes);
+  auto start = high_resolution_clock::now();
+  exh_rec(0, 0, INT_MAX, best_sol, cars_left, ce, ne, classes, start);
 }
 
 int main()
@@ -63,6 +85,5 @@ int main()
       cin >> imprv;
     classes[i].imp = imp;
   }
-
   exh(C, ce, ne, classes);
 }
