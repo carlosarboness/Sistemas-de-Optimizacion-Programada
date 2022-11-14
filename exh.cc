@@ -4,6 +4,8 @@
 #include <chrono>
 #include <iomanip>
 #include <queue>
+#include <cassert>
+#include <fstream>
 using namespace std::chrono;
 using namespace std;
 
@@ -21,19 +23,19 @@ struct Pen
   queue<int> q; // cua que conté els últims ne elements
 };
 
-void write_solution(const VI &best_sol, int pen, double time)
+void write_solution(const VI &best_sol, int pen, const double &time, ofstream &s)
 {
-  cout << pen << " " << setprecision(1) << time << endl;
+  s << pen << " " << setprecision(1) << time << endl;
   bool primer = true;
-  for (auto &s : best_sol)
+  for (auto &b : best_sol)
   {
     if (primer)
       primer = false;
     else
-      cout << " ";
-    cout << s;
+      s << " ";
+    s << b;
   }
-  cout << endl;
+  s << endl;
 }
 
 int count_pen_millora(int improv, Pen &pena, int ce_i)
@@ -55,7 +57,7 @@ int count_pen_tot(const VI &imp, vector<Pen> &pens, const VI ce)
 }
 
 void exh_rec(int i, int current_pen, int min_pen, VI &best_sol, VI &cars_left, vector<Pen> &pens,
-             const VI ce, const VI ne, const vector<Class> &classes, const auto &start)
+             const VI ce, const VI ne, const vector<Class> &classes, clock_t start, ofstream &s)
 {
   int C = best_sol.size();
   int K = classes.size();
@@ -63,8 +65,9 @@ void exh_rec(int i, int current_pen, int min_pen, VI &best_sol, VI &cars_left, v
     return;
   if (i == C)
   {
-    auto now = high_resolution_clock::now();
-    write_solution(best_sol, current_pen, now - start);
+    clock_t now = clock();
+    double elapsed_time = (double)(start - now);
+    write_solution(best_sol, current_pen, elapsed_time, s);
   }
   else
   {
@@ -74,14 +77,15 @@ void exh_rec(int i, int current_pen, int min_pen, VI &best_sol, VI &cars_left, v
       {
         --cars_left[j];
         best_sol[i] = j;
-        exh_rec(i + 1, current_pen + count_pen_tot(classes[j].imp, pens, ce), min_pen, best_sol, cars_left, ce, ne, classes);
+        exh_rec(i + 1, current_pen + count_pen_tot(classes[j].imp, pens, ce),
+                min_pen, best_sol, cars_left, pens, ce, ne, classes, start, s);
         ++cars_left[j];
       }
     }
   }
 }
 
-void exh(int C, const VI &ce, const VI &ne, const vector<Class> &classes)
+void exh(ofstream &s, int C, const VI &ce, const VI &ne, const vector<Class> &classes)
 {
   int K = classes.size();
   int M = ne.size();
@@ -97,27 +101,40 @@ void exh(int C, const VI &ce, const VI &ne, const vector<Class> &classes)
       pens[i].q.push(0);
     // assert(pens[i].q.size() == ne);
   }
-  auto start = high_resolution_clock::now();
-  exh_rec(0, 0, INT_MAX, best_sol, cars_left, pens, ce, ne, classes, start);
+  clock_t start = clock();
+  exh_rec(0, 0, INT_MAX, best_sol, cars_left, pens, ce, ne, classes, start, s);
 }
 
-int main()
+void read_input(ifstream &f, int &C, int &M, int &K, VI &ce, VI &ne, vector<Class> &classes)
 {
-  int C, M, K;
-  cin >> C >> M >> K;
-  VI ce(M), ne(M);
+  f >> C >> M >> K;
   for (auto &capacity : ce)
-    cin >> capacity;
+    f >> capacity;
   for (auto &num_cars : ne)
-    cin >> num_cars;
-  vector<Class> classes(K);
+    f >> num_cars;
   for (int i = 0; i < K; ++i)
   {
-    cin >> classes[i].id >> classes[i].n;
+    f >> classes[i].id >> classes[i].n;
     VI imp(M);
     for (auto &imprv : imp)
-      cin >> imprv;
+      f >> imprv;
     classes[i].imp = imp;
   }
-  exh(C, ce, ne, classes);
+}
+
+int main(int argc, char *argv[])
+{
+  assert(argc == 3);
+  string fe = argv[1], fs = argv[2];
+
+  ifstream f(fe);
+  ofstream s(fs);
+
+  int C, M, K;
+  VI ce(M), ne(M);
+  vector<Class> classes(K);
+
+  read_input(f, C, M, K, ce, ne, classes);
+
+  exh(s, C, ce, ne, classes);
 }
