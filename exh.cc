@@ -11,6 +11,11 @@ using namespace std;
 
 using VI = vector<int>;
 
+double now()
+{
+  return clock() / double(CLOCKS_PER_SEC);
+}
+
 struct Class
 {
   int id, n;
@@ -57,7 +62,7 @@ int count_pen_tot(const VI &imp, vector<Pen> &pens, const VI ce)
 }
 
 void exh_rec(int i, int current_pen, int min_pen, VI &best_sol, VI &cars_left, vector<Pen> &pens,
-             const VI ce, const VI ne, const vector<Class> &classes, clock_t start, ofstream &s)
+             const VI ce, const VI ne, const vector<Class> &classes, const double &start, ofstream &s)
 {
   int C = best_sol.size();
   int K = classes.size();
@@ -65,8 +70,8 @@ void exh_rec(int i, int current_pen, int min_pen, VI &best_sol, VI &cars_left, v
     return;
   if (i == C)
   {
-    clock_t now = clock();
-    double elapsed_time = (double)(start - now);
+    double end = now();
+    double elapsed_time = end - start;
     write_solution(best_sol, current_pen, elapsed_time, s);
   }
   else
@@ -101,13 +106,16 @@ void exh(ofstream &s, int C, const VI &ce, const VI &ne, const vector<Class> &cl
       pens[i].q.push(0);
     // assert(pens[i].q.size() == ne);
   }
-  clock_t start = clock();
+  double start = now();
   exh_rec(0, 0, INT_MAX, best_sol, cars_left, pens, ce, ne, classes, start, s);
 }
 
 void read_input(ifstream &f, int &C, int &M, int &K, VI &ce, VI &ne, vector<Class> &classes)
 {
   f >> C >> M >> K;
+  ce.resize(M);
+  ne.resize(M);
+  classes.resize(K);
   for (auto &capacity : ce)
     f >> capacity;
   for (auto &num_cars : ne)
@@ -131,8 +139,8 @@ int main(int argc, char *argv[])
   ofstream s(fs);
 
   int C, M, K;
-  VI ce(M), ne(M);
-  vector<Class> classes(K);
+  VI ce, ne;
+  vector<Class> classes;
 
   read_input(f, C, M, K, ce, ne, classes);
 
