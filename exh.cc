@@ -18,8 +18,8 @@ double now()
 
 struct Class
 {
-  int id, n;
-  VI imp; // improvements
+  int id, n; // id and # of cars of the Class
+  VI imp;    // improvements
 };
 
 struct Pen
