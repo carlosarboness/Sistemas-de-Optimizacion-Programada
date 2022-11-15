@@ -28,11 +28,11 @@ struct Pen
   queue<int> q; // cua que conté els últims ne elements
 };
 
-void write_solution(const VI &best_sol, int pen, const double &time, ofstream &s)
+void write_solution(const VI &current_sol, int pen, const double &time, ofstream &s)
 {
-  s << pen << " " << setprecision(1) << time << endl;
+  s << pen << " " << time << endl;
   bool primer = true;
-  for (auto &b : best_sol)
+  for (auto &b : current_sol)
   {
     if (primer)
       primer = false;
@@ -45,9 +45,10 @@ void write_solution(const VI &best_sol, int pen, const double &time, ofstream &s
 
 int count_pen_millora(int improv, Pen &pena, int ce_i)
 {
-  pena.sum += improv;
   pena.sum -= pena.q.front();
   pena.q.pop();
+  pena.q.push(improv);
+  pena.sum += improv;
   return max(pena.sum - ce_i, 0);
 }
 
@@ -57,22 +58,27 @@ int count_pen_tot(const VI &imp, vector<Pen> &pens, const VI ce)
   int M = pens.size();
   int pen_tot = 0;
   for (int i = 0; i < M; ++i)
-    pen_tot += count_pen_millora(imp[i], pens[i], ce[i]);
+  {
+    int x = count_pen_millora(imp[i], pens[i], ce[i]);
+    pen_tot += x;
+  }
   return pen_tot;
 }
 
-void exh_rec(int i, int current_pen, int min_pen, VI &best_sol, VI &cars_left, vector<Pen> &pens,
+void exh_rec(int i, int current_pen, int &min_pen, VI &current_sol, VI &cars_left, vector<Pen> &pens,
              const VI ce, const VI ne, const vector<Class> &classes, const double &start, ofstream &s)
 {
-  int C = best_sol.size();
+  int C = current_sol.size();
   int K = classes.size();
   if (current_pen >= min_pen)
     return;
   if (i == C)
   {
+    min_pen = current_pen;
+
     double end = now();
     double elapsed_time = end - start;
-    write_solution(best_sol, current_pen, elapsed_time, s);
+    write_solution(current_sol, current_pen, elapsed_time, s);
   }
   else
   {
@@ -81,9 +87,11 @@ void exh_rec(int i, int current_pen, int min_pen, VI &best_sol, VI &cars_left, v
       if (cars_left[j] > 0)
       {
         --cars_left[j];
-        best_sol[i] = j;
+        current_sol[i] = j;
+        vector<Pen> pens_rec = pens;
         exh_rec(i + 1, current_pen + count_pen_tot(classes[j].imp, pens, ce),
-                min_pen, best_sol, cars_left, pens, ce, ne, classes, start, s);
+                min_pen, current_sol, cars_left, pens, ce, ne, classes, start, s);
+        pens = pens_rec;
         ++cars_left[j];
       }
     }
@@ -94,7 +102,7 @@ void exh(ofstream &s, int C, const VI &ce, const VI &ne, const vector<Class> &cl
 {
   int K = classes.size();
   int M = ne.size();
-  VI best_sol(C);
+  VI current_sol(C);
   VI cars_left(K);
   for (int i = 0; i < K; ++i)
     cars_left[i] = classes[i].n;
@@ -107,7 +115,8 @@ void exh(ofstream &s, int C, const VI &ce, const VI &ne, const vector<Class> &cl
     // assert(pens[i].q.size() == ne);
   }
   double start = now();
-  exh_rec(0, 0, INT_MAX, best_sol, cars_left, pens, ce, ne, classes, start, s);
+  int min_pen = INT_MAX;
+  exh_rec(0, 0, min_pen, current_sol, cars_left, pens, ce, ne, classes, start, s);
 }
 
 void read_input(ifstream &f, int &C, int &M, int &K, VI &ce, VI &ne, vector<Class> &classes)
@@ -132,11 +141,15 @@ void read_input(ifstream &f, int &C, int &M, int &K, VI &ce, VI &ne, vector<Clas
 
 int main(int argc, char *argv[])
 {
+
   assert(argc == 3);
   string fe = argv[1], fs = argv[2];
 
   ifstream f(fe);
   ofstream s(fs);
+
+  s.setf(ios::fixed);
+  s.precision(1);
 
   int C, M, K;
   VI ce, ne;
