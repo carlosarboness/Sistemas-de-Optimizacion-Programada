@@ -1,29 +1,12 @@
 #include <iostream>
 #include <vector>
 #include <climits>
-#include <chrono>
 #include <queue>
-#include <cassert>
 #include <fstream>
 #include <sstream>
-using namespace std::chrono;
 using namespace std;
 
 using VI = vector<int>;
-
-double now()
-{
-  return clock() / double(CLOCKS_PER_SEC);
-}
-
-ofstream open(const string &s)
-{
-  ofstream f;
-  f.open(s, ofstream::out | ofstream::trunc);
-  f.setf(ios::fixed);
-  f.precision(1);
-  return f;
-}
 
 struct Class
 {
