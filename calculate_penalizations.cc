@@ -20,23 +20,6 @@ struct Pen
   queue<int> q; // cua que conté els últims ne elements
 };
 
-void write_solution(const VI &current_sol, int pen, const double &time, const string &s)
-{
-  ofstream f = open(s);
-  f << pen << " " << time << endl;
-  bool primer = true;
-  for (auto &b : current_sol)
-  {
-    if (primer)
-      primer = false;
-    else
-      f << " ";
-    f << b;
-  }
-  f << endl;
-  f.close();
-}
-
 int count_pen_millora(int improv, Pen &pena, int ce_i)
 {
   pena.sum -= pena.q.front();
