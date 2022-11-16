@@ -2,7 +2,6 @@
 #include <vector>
 #include <climits>
 #include <chrono>
-#include <iomanip>
 #include <queue>
 #include <cassert>
 #include <fstream>
@@ -14,6 +13,15 @@ using VI = vector<int>;
 double now()
 {
   return clock() / double(CLOCKS_PER_SEC);
+}
+
+ofstream open(const string &s)
+{
+  ofstream f;
+  f.open(s, ofstream::out | ofstream::trunc);
+  f.setf(ios::fixed);
+  f.precision(1);
+  return f;
 }
 
 struct Class
@@ -28,19 +36,21 @@ struct Pen
   queue<int> q; // cua que conté els últims ne elements
 };
 
-void write_solution(const VI &current_sol, int pen, const double &time, ofstream &s)
+void write_solution(const VI &current_sol, int pen, const double &time, const string &s)
 {
-  s << pen << " " << time << endl;
+  ofstream f = open(s);
+  f << pen << " " << time << endl;
   bool primer = true;
   for (auto &b : current_sol)
   {
     if (primer)
       primer = false;
     else
-      s << " ";
-    s << b;
+      f << " ";
+    f << b;
   }
-  s << endl;
+  f << endl;
+  f.close();
 }
 
 int count_pen_millora(int improv, Pen &pena, int ce_i)
@@ -66,7 +76,7 @@ int count_pen_tot(const VI &imp, vector<Pen> &pens, const VI ce)
 }
 
 void exh_rec(int i, int current_pen, int &min_pen, VI &current_sol, VI &cars_left, vector<Pen> &pens,
-             const VI ce, const VI ne, const vector<Class> &classes, const double &start, ofstream &s)
+             const VI ce, const VI ne, const vector<Class> &classes, const double &start, const string &s)
 {
   int C = current_sol.size();
   int K = classes.size();
@@ -98,7 +108,7 @@ void exh_rec(int i, int current_pen, int &min_pen, VI &current_sol, VI &cars_lef
   }
 }
 
-void exh(ofstream &s, int C, const VI &ce, const VI &ne, const vector<Class> &classes)
+void exh(const string &s, int C, const VI &ce, const VI &ne, const vector<Class> &classes)
 {
   int K = classes.size();
   int M = ne.size();
@@ -112,7 +122,6 @@ void exh(ofstream &s, int C, const VI &ce, const VI &ne, const vector<Class> &cl
     pens[i].sum = 0;
     for (int j = 0; j < ne[i]; ++j)
       pens[i].q.push(0);
-    // assert(pens[i].q.size() == ne);
   }
   double start = now();
   int min_pen = INT_MAX;
@@ -143,13 +152,8 @@ int main(int argc, char *argv[])
 {
 
   assert(argc == 3);
-  string fe = argv[1], fs = argv[2];
 
-  ifstream f(fe);
-  ofstream s(fs);
-
-  s.setf(ios::fixed);
-  s.precision(1);
+  ifstream f(argv[1]);
 
   int C, M, K;
   VI ce, ne;
@@ -157,5 +161,5 @@ int main(int argc, char *argv[])
 
   read_input(f, C, M, K, ce, ne, classes);
 
-  exh(s, C, ce, ne, classes);
+  exh(argv[2], C, ce, ne, classes);
 }
