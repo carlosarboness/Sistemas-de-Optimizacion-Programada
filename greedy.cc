@@ -67,11 +67,7 @@ double calculate_cost(const VI &ce, const VI &ne, const VI &imp_i, const VI &imp
   int M = imp_i.size();
   for (int k = 0; k < M; ++k)
     if (imp_i[k] == imp_j[k])
-<<<<<<< HEAD
-      cost += ne[k] / (ce[k] * 2);
-=======
-        cost += ne[k]/(ce[k]*2);
->>>>>>> bcbd7f464f17536f19fdf7cc71c07cbf0136e490
+      cost += ne[k] / ce[k];
   return cost;
 }
 
