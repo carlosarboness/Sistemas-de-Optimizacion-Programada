@@ -86,36 +86,22 @@ int argmax_VI(const VI &v)
   return k;
 }
 
-/*
-If priorize_cost, returns the id_car priorize_id_less_cost if equal priorize_id_more_cars_left if equal smaller_id
-if not priorize_cost, returns the id_car priorize_id_more_cars_left if equal priorize_id_less_cost if equal smaller_id
-also updates the cars_left[id_car]
-*/
-int conditions(int last_car, VI &cars_left, const VD &costs, bool priorize_cost)
+int conditions(int last_car, VI &cars_left, const VD &costs)
 {
   int K = cars_left.size();
   int cl = 0;
-  double cost = 1e6;
+  double cost = -1;
   int id_car = -1;
   for (int i = 0; i < K; ++i)
-    if (priorize_cost)
+  {
+
+    if (cars_left[i] > cl or (cars_left[i] == cl and costs[i] < cost))
     {
-      if (costs[i] < cost or (costs[i] == cost and cars_left[i] > cl))
-      {
-        id_car = i;
-        cl = cars_left[i];
-        cost = costs[i];
-      }
+      id_car = i;
+      cl = cars_left[i];
+      cost = costs[i];
     }
-    else
-    {
-      if (cars_left[i] > cl or (cars_left[i] == cl and costs[i] < cost))
-      {
-        id_car = i;
-        cl = cars_left[i];
-        cost = costs[i];
-      }
-    }
+  }
   --cars_left[id_car];
   return id_car;
 }
@@ -135,14 +121,10 @@ VI gen_sol(int C, const VI &ce, const VI &ne, const vector<Class> &classes)
       costs[i][j] = costs[j][i] = calculate_cost(ce, ne, classes[i].imp, classes[j].imp);
 
   // Calculate solution
-  int k = 0;
-  solution[k] = argmax_VI(cars_left);
-  --cars_left[solution[k++]];
-  int ce_max = ce[argmax_VI(ce)];
-  while (k <= ce_max)
-    solution[k++] = conditions(solution[k - 1], cars_left, costs[k - 1], false);
-  while (k < C)
-    solution[k++] = conditions(solution[k - 1], cars_left, costs[k - 1], true);
+  solution[0] = argmax_VI(cars_left);
+  --cars_left[solution[0]];
+  for (int k = 1; k < C; ++k)
+    solution[k] = conditions(solution[k - 1], cars_left, costs[solution[k - 1]]);
   return solution;
 }
 
