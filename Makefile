@@ -1,7 +1,14 @@
 all: comp exc
-comp: 
+comp_exh: 
 	g++ -O2 -std=c++17 exh.cc
-exc: 
+
+comp_greedy:
+	g++ -O2 -std=c++17 greedy.cc
+
+comp_cal:
+	g++ -O2 -std=c++17 calculate_penalizations.cc
+
+exh: 
 	./a.out ./easy/easy-1.txt ./sol_easy/sol_easy-1.txt
 	./a.out ./easy/easy-2.txt ./sol_easy/sol_easy-2.txt
 	./a.out ./easy/easy-3.txt ./sol_easy/sol_easy-3.txt
@@ -14,5 +21,9 @@ exc:
 	./a.out ./easy/easy-10.txt ./sol_easy/sol_easy-10.txt
 
 cal:
-	g++ -O2 -std=c++17 calculate_penalizations.cc
 	./a.out ./cal_pen/easy-1.txt
+
+greedy:
+	./a.out ./easy/easy-1.txt ./sol_easy/sol_easy-1.txt
+
+	
