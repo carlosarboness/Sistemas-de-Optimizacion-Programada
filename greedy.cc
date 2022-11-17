@@ -62,16 +62,16 @@ write_solution(const VI &current_sol, int pen, const double &time, const string 
   f.close();
 }
 
-int calculate_cost(const VI &ce, const VI &ne, const VI &imp_i, const VI &imp_j)
+double calculate_cost(const VI &ce, const VI &ne, const VI &imp_i, const VI &imp_j)
 {
-  int cost = 0;
+  double cost = 0;
   int M = imp_i.size();
   for (int k = 0; k < M; ++k)
     if (imp_i[k] == imp_j[k])
       if (ne[k] == 2)
         cost += 1;
       else
-        cost += ce[k] / 2 * ne[k];
+        cost += ce[k] / ne[k];
   return cost;
 }
 
@@ -93,7 +93,7 @@ VI gen_sol(int C, int &pen, const VI &ce, const VI &ne, const vector<Class> &cla
   }
   MD costs(C, VD(C));
   for (int i = 0; i < C; ++i)
-    for (int j = 0; j < C; ++j)
+    for (int j = i; j < C; ++j)
       costs[i][j] = costs[j][i] = calculate_cost(ce, ne, classes[i].imp, classes[j].imp);
 
   // Calculate solution
@@ -108,7 +108,6 @@ VI gen_sol(int C, int &pen, const VI &ce, const VI &ne, const vector<Class> &cla
       id = i
   solution[k] = id;
   ++k;
-
   2n:
   //calculate ce_max
   while(k <= ce_max){
@@ -118,7 +117,6 @@ VI gen_sol(int C, int &pen, const VI &ce, const VI &ne, const vector<Class> &cla
     ++k;
     actualize_pen;
   }
-
   3r:
   while(k < C){
     solution[k] = priorize_id_less_cost
@@ -127,7 +125,6 @@ VI gen_sol(int C, int &pen, const VI &ce, const VI &ne, const vector<Class> &cla
     ++k;
     actualize_pen;
   }
-
   */
   return solution;
 }
