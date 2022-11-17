@@ -29,16 +29,12 @@ int count_pen_millora(int improv, Pen &pena, int ce_i)
   return max(pena.sum - ce_i, 0);
 }
 
-// falta sumar la part del final que no te mida n!!!
 int count_pen_tot(const VI &imp, vector<Pen> &pens, const VI ce)
 {
   int M = pens.size();
   int pen_tot = 0;
   for (int i = 0; i < M; ++i)
-  {
-    int x = count_pen_millora(imp[i], pens[i], ce[i]);
-    pen_tot += x;
-  }
+    pen_tot += count_pen_millora(imp[i], pens[i], ce[i]);
   return pen_tot;
 }
 
@@ -55,9 +51,7 @@ int count_pen(const vector<int> &sol, int C, const VI &ce, const VI &ne, const v
       pens[i].q.push(0);
   }
   for (int i = 0; i < C; ++i)
-  {
     total_pen += count_pen_tot(classes[sol[i]].imp, pens, ce);
-  }
   return total_pen;
 }
 
