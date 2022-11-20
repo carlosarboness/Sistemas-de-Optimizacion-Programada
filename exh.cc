@@ -9,6 +9,7 @@ using namespace std::chrono;
 using namespace std;
 
 using VI = vector<int>;
+using MI = vector<VI>;
 
 double now()
 {
@@ -62,7 +63,6 @@ int count_pen_millora(int improv, Pen &pena, int ce_i)
   return max(pena.sum - ce_i, 0);
 }
 
-// falta sumar la part del final que no te mida n!!!
 int count_pen_tot(const VI &imp, vector<Pen> &pens, const VI ce)
 {
   int M = pens.size();
@@ -75,8 +75,36 @@ int count_pen_tot(const VI &imp, vector<Pen> &pens, const VI ce)
   return pen_tot;
 }
 
+int min_VI(const VI &v)
+{
+  int n = v.size();
+  int min_elem = INT_MAX;
+  for (int i = 0; i < n; ++i)
+    if (v[i] < min_elem)
+      min_elem = v[i];
+  return min_elem;
+}
+
+int lower_bound(int i, int current_pen, const VI &current_sol, const VI &cars_left, const MI &costs)
+{
+  if (i == 0)
+    return -1;
+  int lb = current_pen;
+  int K = cars_left.size();
+  for (int j = 0; j < K; ++j)
+    if (cars_left[j] > 0)
+    {
+      int min = INT_MAX;
+      for (int k = 0; k < K; ++k)
+        if (cars_left[k] > 0 and costs[j][k] < min)
+          min = costs[j][k];
+      lb += min * cars_left[j];
+    }
+  return lb;
+}
+
 void exh_rec(int i, int current_pen, int &min_pen, VI &current_sol, VI &cars_left, vector<Pen> &pens,
-             const VI ce, const VI ne, const vector<Class> &classes, const double &start, const string &s)
+             const VI ce, const VI ne, const vector<Class> &classes, const MI &costs, const double &start, const string &s)
 {
   int C = current_sol.size();
   int K = classes.size();
@@ -90,7 +118,7 @@ void exh_rec(int i, int current_pen, int &min_pen, VI &current_sol, VI &cars_lef
     double elapsed_time = end - start;
     write_solution(current_sol, current_pen, elapsed_time, s);
   }
-  else
+  else if (lower_bound(i, current_pen, current_sol, cars_left, costs) < min_pen)
   {
     for (int j = 0; j < K; ++j)
     {
@@ -100,12 +128,22 @@ void exh_rec(int i, int current_pen, int &min_pen, VI &current_sol, VI &cars_lef
         current_sol[i] = j;
         vector<Pen> pens_rec = pens;
         exh_rec(i + 1, current_pen + count_pen_tot(classes[j].imp, pens, ce),
-                min_pen, current_sol, cars_left, pens, ce, ne, classes, start, s);
+                min_pen, current_sol, cars_left, pens, ce, ne, classes, costs, start, s);
         pens = pens_rec;
         ++cars_left[j];
       }
     }
   }
+}
+
+int calculate_cost(const VI &ne, const VI &imp_i, const VI &imp_j)
+{
+  int cost = 0;
+  int M = imp_i.size();
+  for (int k = 0; k < M; ++k)
+    if (imp_i[k] == imp_j[k] and ne[k] == 2)
+      ++cost;
+  return cost;
 }
 
 void exh(const string &s, int C, const VI &ce, const VI &ne, const vector<Class> &classes)
@@ -123,9 +161,14 @@ void exh(const string &s, int C, const VI &ce, const VI &ne, const vector<Class>
     for (int j = 0; j < ne[i]; ++j)
       pens[i].q.push(0);
   }
+  MI costs(K, VI(K));
+  for (int i = 0; i < K; ++i)
+    for (int j = i; j < K; ++j)
+      costs[i][j] = costs[j][i] = calculate_cost(ne, classes[i].imp, classes[j].imp);
+
   double start = now();
   int min_pen = INT_MAX;
-  exh_rec(0, 0, min_pen, current_sol, cars_left, pens, ce, ne, classes, start, s);
+  exh_rec(0, 0, min_pen, current_sol, cars_left, pens, ce, ne, classes, costs, start, s);
 }
 
 void read_input(ifstream &f, int &C, int &M, int &K, VI &ce, VI &ne, vector<Class> &classes)

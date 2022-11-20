@@ -38,12 +38,6 @@ struct Pen
   queue<int> q; // cua que conté els últims ne elements
 };
 
-struct lakjdfaklj
-{
-  int id, left;
-  int costs;
-};
-
 void write_solution(const VI &current_sol, int pen, const double &time, const string &s)
 {
   ofstream f = open(s);
