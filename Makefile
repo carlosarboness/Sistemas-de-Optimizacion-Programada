@@ -2,6 +2,9 @@ all: comp exc
 comp_exh: 
 	g++ -O2 -std=c++17 exh.cc
 
+comp_exhlb: 
+	g++ -O2 -std=c++17 exh_lb.cc
+
 comp_greedy:
 	g++ -O2 -std=c++17 greedy.cc
 
