@@ -38,6 +38,10 @@ struct Pen
   queue<int> q; // cua que conté els últims ne elements
 };
 
+/*
+Writes the solution in corrent_sol with penalitation pen that took time seconts to be
+found in the ouput file s with the appropiate format
+*/
 void write_solution(const VI &current_sol, int pen, const double &time, const string &s)
 {
   ofstream f = open(s);
@@ -55,6 +59,11 @@ void write_solution(const VI &current_sol, int pen, const double &time, const st
   f.close();
 }
 
+/*
+Returns the aproximate cost of going from a car with the improvements of imp_i to a
+car with the improvemnts of imp_j. The aproximate cost is the sum of ne/ce ot the
+improvments that both cars have.
+*/
 double calculate_cost(const VI &ce, const VI &ne, const VI &imp_i, const VI &imp_j)
 {
   double cost = 0;
@@ -65,7 +74,9 @@ double calculate_cost(const VI &ce, const VI &ne, const VI &imp_i, const VI &imp
   return cost;
 }
 
-// returns the argmax of VI
+/*
+Returns the argmax of the vector v
+*/
 int argmax_VI(const VI &v)
 {
   int n = v.size();
@@ -80,6 +91,9 @@ int argmax_VI(const VI &v)
   return k;
 }
 
+/*
+Returns the class of the car that is written next in the solution following the greedy algorithm
+*/
 int conditions(int last_car, VI &cars_left, const VD &costs)
 {
   int K = cars_left.size();
@@ -100,19 +114,22 @@ int conditions(int last_car, VI &cars_left, const VD &costs)
   return id_car;
 }
 
+/*
+Returns the vector with the solution following the greedy algorithm
+*/
 VI gen_sol(int C, const VI &ce, const VI &ne, const vector<Class> &classes)
 {
   // Generate data structues
   int K = classes.size();
   int M = ne.size();
-  VI solution(C);
   VI cars_left(K);
   for (int i = 0; i < K; ++i)
     cars_left[i] = classes[i].n;
-  MD costs(K, VD(K));
+  MD costs(K, VD(K)); // matrix where in the position [i][j] stores the approximate cost of going from i to j
   for (int i = 0; i < K; ++i)
     for (int j = i; j < K; ++j)
       costs[i][j] = costs[j][i] = calculate_cost(ce, ne, classes[i].imp, classes[j].imp);
+  VI solution(C);
 
   // Calculate solution
   solution[0] = argmax_VI(cars_left);
@@ -122,30 +139,51 @@ VI gen_sol(int C, const VI &ce, const VI &ne, const vector<Class> &classes)
   return solution;
 }
 
-int count_pen_millora(int improv, Pen &pena, int ce_i)
+/*
+Returns the penalization of adding the improvment improv
+and updates the Pen pena
+*/
+int count_pen_millora(int improv, Pen &pena, int ce_i, bool final)
 {
   pena.sum -= pena.q.front();
   pena.q.pop();
   pena.q.push(improv);
   pena.sum += improv;
-  return max(pena.sum - ce_i, 0);
+  int pen = max(pena.sum - ce_i, 0);
+  if (final and pen > 0)
+  {
+    while (not pena.q.empty())
+    {
+      pena.sum -= pena.q.front();
+      pena.q.pop();
+      pen += max(pena.sum - ce_i, 0);
+    }
+  }
+  return pen;
 }
 
-int count_pen_tot(const VI &imp, vector<Pen> &pens, const VI ce)
+/*
+Returns the penalization of adding in the solution the class
+with improvment imp and updates the vector of Pen pens
+*/
+int count_pen_tot(const VI &imp, vector<Pen> &pens, const VI ce, bool final)
 {
   int M = pens.size();
   int pen_tot = 0;
-  for (int i = 0; i < M; ++i)
-    pen_tot += count_pen_millora(imp[i], pens[i], ce[i]);
+  for (int j = 0; j < M; ++j)
+    pen_tot += count_pen_millora(imp[j], pens[j], ce[j], final);
   return pen_tot;
 }
 
+/*
+Returns the penalization of the soltion sol
+*/
 int count_pen(const vector<int> &sol, int C, const VI &ce, const VI &ne, const vector<Class> &classes)
 {
   int K = classes.size();
   int M = ne.size();
   int total_pen = 0;
-  vector<Pen> pens(M);
+  vector<Pen> pens(M); // Data structure to calculate the penalizations
   for (int i = 0; i < M; ++i)
   {
     pens[i].sum = 0;
@@ -153,10 +191,19 @@ int count_pen(const vector<int> &sol, int C, const VI &ce, const VI &ne, const v
       pens[i].q.push(0);
   }
   for (int i = 0; i < C; ++i)
-    total_pen += count_pen_tot(classes[sol[i]].imp, pens, ce);
+    total_pen += count_pen_tot(classes[sol[i]].imp, pens, ce, i == C - 1);
   return total_pen;
 }
 
+/*
+Given an imput in the data structures, writes the solution following the greedy algorithm with
+its cost and the time it took to calculate it
+
+The greedy algorithm is the following:
+  - A car of the class with more cars left is added to the solution. If there is more than one maximum
+    the car added is the one that has the less aproximate cost given the last car added to the solution.
+    If there is still a draw, the car with the smallest id is added.
+*/
 void greedy(const string &s, int C, const VI &ce, const VI &ne, const vector<Class> &classes)
 {
   double start = now();
@@ -167,6 +214,9 @@ void greedy(const string &s, int C, const VI &ce, const VI &ne, const vector<Cla
   write_solution(solution, pen, elapsed_time, s);
 }
 
+/*
+Reads the input from the input file f and stores the data in the corresponding data structure
+*/
 void read_input(ifstream &f, int &C, int &M, int &K, VI &ce, VI &ne, vector<Class> &classes)
 {
   f >> C >> M >> K;

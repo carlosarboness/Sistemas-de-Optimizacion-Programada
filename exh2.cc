@@ -89,9 +89,12 @@ void exh_rec(int i, int current_pen, int &min_pen, VI &current_sol, vector<Pen> 
     int C = current_sol.size();
     int K = classes.size();
     if (current_pen >= min_pen)
+    {
         return;
+    }
     if (i == C)
     {
+        cout << "good" << endl;
         min_pen = current_pen;
 
         double end = now();
@@ -104,12 +107,13 @@ void exh_rec(int i, int current_pen, int &min_pen, VI &current_sol, vector<Pen> 
         {
             if (not mkd[j])
             {
-                mkd[j] = true;
+                // cout << j << ' ' << vec[j] << endl;
+                mkd[j] = 1;
                 current_sol[i] = vec[j];
                 vector<Pen> pens_rec = pens;
                 exh_rec(i + 1, current_pen + count_pen_tot(classes[vec[j]].imp, pens, ce, i + 1 == C),
                         min_pen, current_sol, pens, ce, ne, classes, mkd, vec, start, s);
-                mkd[j] = false;
+                mkd[j] = 0;
                 pens = pens_rec;
             }
         }
