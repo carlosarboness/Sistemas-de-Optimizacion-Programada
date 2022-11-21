@@ -121,7 +121,6 @@ VI gen_sol(int C, const VI &ce, const VI &ne, const vector<Class> &classes)
 {
   // Generate data structues
   int K = classes.size();
-  int M = ne.size();
   VI cars_left(K);
   for (int i = 0; i < K; ++i)
     cars_left[i] = classes[i].n;
@@ -180,7 +179,6 @@ Returns the penalization of the soltion sol
 */
 int count_pen(const vector<int> &sol, int C, const VI &ce, const VI &ne, const vector<Class> &classes)
 {
-  int K = classes.size();
   int M = ne.size();
   int total_pen = 0;
   vector<Pen> pens(M); // Data structure to calculate the penalizations

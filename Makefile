@@ -1,21 +1,21 @@
 all: comp exc
 comp_check:
-	g++ -O2 -std=c++17 check.cc
+	g++ -O2 -Wall -std=c++17 check.cc
 
 comp_exh: 
-	g++ -O2 -std=c++17 exh.cc
+	g++ -O2 -Wall -std=c++17 exh.cc
 
 comp_exh2: 
-	g++ -O2 -std=c++17 exh2.cc
+	g++ -O2 -Wall -std=c++17 exh2.cc
 
 comp_exhlb: 
-	g++ -O2 -std=c++17 exh_lb.cc
+	g++ -O2 -Wall -std=c++17 exh_lb.cc
 
 comp_greedy:
-	g++ -O2 -std=c++17 greedy.cc
+	g++ -O2 -Wall -std=c++17 greedy.cc
 
 comp_cal:
-	g++ -O2 -std=c++17 calculate_penalizations.cc
+	g++ -O2 -Wall -std=c++17 calculate_penalizations.cc
 
 check:
 	./a.out ./med/med-1.txt ./sol_med_exhlb/sol_med-1.txt

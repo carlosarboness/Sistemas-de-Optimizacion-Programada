@@ -87,7 +87,6 @@ void exh_rec(int i, int current_pen, int &min_pen, VI &current_sol, vector<Pen> 
              const vector<Class> &classes, VI &mkd, const VI &vec, const double &start, const string &s)
 {
     int C = current_sol.size();
-    int K = classes.size();
     if (current_pen >= min_pen)
     {
         return;
@@ -107,13 +106,13 @@ void exh_rec(int i, int current_pen, int &min_pen, VI &current_sol, vector<Pen> 
         {
             if (not mkd[j])
             {
-                // cout << j << ' ' << vec[j] << endl;
-                mkd[j] = 1;
+                cout << j << ' ' << vec[j] << endl;
+                mkd[j] = true;
                 current_sol[i] = vec[j];
                 vector<Pen> pens_rec = pens;
                 exh_rec(i + 1, current_pen + count_pen_tot(classes[vec[j]].imp, pens, ce, i + 1 == C),
                         min_pen, current_sol, pens, ce, ne, classes, mkd, vec, start, s);
-                mkd[j] = 0;
+                mkd[j] = false;
                 pens = pens_rec;
             }
         }
@@ -169,7 +168,6 @@ VI gen_sol(int C, const VI &ce, const VI &ne, const vector<Class> &classes)
 {
     // Generate data structues
     int K = classes.size();
-    int M = ne.size();
     VI solution(C);
     VI cars_left(K);
     for (int i = 0; i < K; ++i)
@@ -190,7 +188,6 @@ VI gen_sol(int C, const VI &ce, const VI &ne, const vector<Class> &classes)
 
 void exh(const string &s, int C, const VI &ce, const VI &ne, const vector<Class> &classes)
 {
-    int K = classes.size();
     int M = ne.size();
     VI current_sol(C);
     vector<Pen> pens(M);
