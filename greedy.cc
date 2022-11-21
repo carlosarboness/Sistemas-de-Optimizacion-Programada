@@ -150,7 +150,7 @@ int count_pen_millora(int improv, Pen &pena, int ce_i, bool final)
   pena.q.push(improv);
   pena.sum += improv;
   int pen = max(pena.sum - ce_i, 0);
-  if (final and pen > 0)
+  if (final and pen > 0) // if is the final car of the solution, the queue is emptied
   {
     while (not pena.q.empty())
     {
