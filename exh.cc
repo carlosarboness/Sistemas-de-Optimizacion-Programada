@@ -53,24 +53,31 @@ void write_solution(const VI &current_sol, int pen, const double &time, const st
     f.close();
 }
 
-int count_pen_millora(int improv, Pen &pena, int ce_i)
+int count_pen_millora(int improv, Pen &pena, int ce_i, bool final)
 {
     pena.sum -= pena.q.front();
     pena.q.pop();
     pena.q.push(improv);
     pena.sum += improv;
-    return max(pena.sum - ce_i, 0);
+    int pen = max(pena.sum - ce_i, 0);
+    if (final and pen > 0)
+    {
+        while (not pena.q.empty())
+        {
+            pena.sum -= pena.q.front();
+            pena.q.pop();
+            pen += max(pena.sum - ce_i, 0);
+        }
+    }
+    return pen;
 }
 
-int count_pen_tot(const VI &imp, vector<Pen> &pens, const VI ce)
+int count_pen_tot(const VI &imp, vector<Pen> &pens, const VI ce, bool final)
 {
     int M = pens.size();
     int pen_tot = 0;
-    for (int i = 0; i < M; ++i)
-    {
-        int x = count_pen_millora(imp[i], pens[i], ce[i]);
-        pen_tot += x;
-    }
+    for (int j = 0; j < M; ++j)
+        pen_tot += count_pen_millora(imp[j], pens[j], ce[j], final);
     return pen_tot;
 }
 
@@ -98,7 +105,7 @@ void exh_rec(int i, int current_pen, int &min_pen, VI &current_sol, VI &cars_lef
                 --cars_left[j];
                 current_sol[i] = j;
                 vector<Pen> pens_rec = pens;
-                exh_rec(i + 1, current_pen + count_pen_tot(classes[j].imp, pens, ce),
+                exh_rec(i + 1, current_pen + count_pen_tot(classes[j].imp, pens, ce, i + 1 == C),
                         min_pen, current_sol, cars_left, pens, ce, ne, classes, start, s);
                 pens = pens_rec;
                 ++cars_left[j];
