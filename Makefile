@@ -5,6 +5,9 @@ comp_check:
 comp_exh: 
 	g++ -O2 -std=c++17 exh.cc
 
+comp_exh2: 
+	g++ -O2 -std=c++17 exh2.cc
+
 comp_exhlb: 
 	g++ -O2 -std=c++17 exh_lb.cc
 
