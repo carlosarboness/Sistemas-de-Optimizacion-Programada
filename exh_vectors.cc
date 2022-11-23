@@ -84,8 +84,7 @@ int update_station(int bit, Station &st, int ce, int ne, bool end)
   if (end)
   {
     ++uw;
-    --ne;
-    for (; st.requirements > 0 and ne > 0; ++uw, --ne)
+    for (; st.requirements > 0; ++uw)
     {
       st.requirements -= st.line[uw];
       penalitzation += max(st.requirements - ce, 0);
@@ -127,7 +126,7 @@ int lb_station(int j, int i, const VI &cs, const VI &cleft, int ce, int ne, cons
 {
   int C = cs.size();
   int initial_zeros = 0;
-  for (int k = i; cs[i] == 0; --k)
+  for (int k = i; cs[k] == 0 and k >= 0; --k)
     ++initial_zeros;
   initial_zeros = max(min(ne - ce, ne - ce - initial_zeros), 0);
   int ones = calculate_ones(j, cleft, classes);
@@ -146,6 +145,8 @@ int lb_station(int j, int i, const VI &cs, const VI &cleft, int ce, int ne, cons
 
 int lower_bound(int i, int cp, const VI &cs, const VI &cleft, const VI &ce, const VI &ne, const VC &classes)
 {
+  if (i < 0)
+    return 0;
   int M = ne.size();
   int lb = cp;
   for (int j = 0; j < M; ++j)
