@@ -2,6 +2,9 @@ all: comp exc
 comp_check:
 	g++ -O2 -Wall -std=c++17 check.cc
 
+comp_exhv:
+	g++ -O2 -Wall -std=c++17 exh_vectors.cc
+
 comp_exh: 
 	g++ -O2 -Wall -std=c++17 exh.cc
 

@@ -2,12 +2,8 @@
 #include <vector>
 #include <climits>
 #include <chrono>
-#include <queue>
 #include <cassert>
 #include <fstream>
-#include <algorithm>
-#include <random>
-using namespace std::chrono;
 using namespace std;
 
 struct Class;
@@ -110,6 +106,55 @@ int UPL(const VI &improvements, VS &stations, const VI &ce, const VI &ne, bool e
   return total_penalitzations;
 }
 
+int factorial(int n)
+{
+  int result = 1;
+  for (; n > 0; --n)
+    result *= n;
+  return result;
+}
+
+int calculate_ones(int j, const VI &cleft, const VC &classes)
+{
+  int K = cleft.size();
+  int ones = 0;
+  for (int i = 0; i < K; ++i)
+    ones += cleft[i] * classes[i].improvements[j];
+  return ones;
+}
+
+int lb_station(int j, int i, const VI &cs, const VI &cleft, int ce, int ne, const VC &classes)
+{
+  int C = cs.size();
+  int initial_zeros = 0;
+  for (int k = i; cs[i] == 0; --k)
+    ++initial_zeros;
+  initial_zeros = max(min(ne - ce, ne - ce - initial_zeros), 0);
+  int ones = calculate_ones(j, cleft, classes);
+  int zeros = (C - i) - ones - initial_zeros;
+  ones -= ce;
+  while (zeros > 0 and ones > 0)
+  {
+    zeros -= (ne - ce);
+    ones -= ce;
+  }
+  if (ones > 0)
+    return (ones - ne + 1) * (ne - ce) + factorial(ne - ce - 1);
+  else
+    return 0;
+}
+
+int lower_bound(int i, int cp, const VI &cs, const VI &cleft, const VI &ce, const VI &ne, const VC &classes)
+{
+  int M = ne.size();
+  int lb = cp;
+  for (int j = 0; j < M; ++j)
+  {
+    lb += lb_station(j, i, cs, cleft, ce[j], ne[j], classes);
+  }
+  return lb;
+}
+
 void exhaustive_search_rec(int i, int cp, int &mp, VI &cs, VI &cleft, VS &stations, const VI &ce,
                            const VI &ne, const VC &classes, const double &start, const string &out)
 {
@@ -121,7 +166,7 @@ void exhaustive_search_rec(int i, int cp, int &mp, VI &cs, VI &cleft, VS &statio
     mp = cp;
     write_solution(cs, cp, now() - start, out);
   }
-  else
+  else if (lower_bound(i - 1, cp, cs, cleft, ce, ne, classes) < mp)
   {
     for (int cl = 0; cl < K; ++cl)
     {
@@ -130,13 +175,13 @@ void exhaustive_search_rec(int i, int cp, int &mp, VI &cs, VI &cleft, VS &statio
         --cleft[cl];
         cs[i] = cl;
 
-        // VS stationsr = stations;
+        VS stationsr = stations;
 
         if (int up = UPL(classes[cl].improvements, stations, ce, ne, i + 1 == C); up + cp < mp)
           exhaustive_search_rec(i + 1, cp + up, mp, cs, cleft, stations, ce, ne, classes, start, out);
 
-        // stations = stationsr;
-        restore(stations, ne);
+        stations = stationsr;
+        // restore(stations, ne);
         ++cleft[cl];
       }
     }
@@ -171,7 +216,6 @@ VI count_cleft(const VC &classes)
 
 void exhaustive_search(int C, const VI &ce, const VI &ne, const VC &classes, const string &out)
 {
-  int K = classes.size();
   int M = ce.size();
 
   VI cs(C); // current solution
