@@ -1,9 +1,11 @@
 #include <iostream>
 #include <vector>
 #include <climits>
+#include <random>
 #include <chrono>
 #include <cassert>
 #include <fstream>
+#include <algorithm>
 using namespace std;
 
 struct Class;
@@ -148,11 +150,10 @@ int lower_bound(int i, int cp, const VI &cs, const VI &cleft, const VI &ce, cons
     return lb;
 }
 
-void exhaustive_search_rec(int i, int cp, int &mp, VI &cs, VI &cleft, VS &stations, const VI &ce,
-                           const VI &ne, const VI &fact, const VC &classes, const double &start, const string &out)
+void exhaustive_search_rec(int i, int cp, int &mp, VI &cs, VI &cleft, VS &stations, const VI &ce, const VI &ne,
+                           const VI &fact, const VC &classes, const VI &rand, VI &mkd, const double &start, const string &out)
 {
     int C = cs.size();
-    int K = classes.size();
 
     if (i == C)
     {
@@ -161,21 +162,25 @@ void exhaustive_search_rec(int i, int cp, int &mp, VI &cs, VI &cleft, VS &statio
     }
     else if (lower_bound(i - 1, cp, cs, cleft, ce, ne, fact, classes) < mp)
     {
-        for (int cl = 0; cl < K; ++cl)
+        for (int j = 0; j < C; ++j)
         {
-            if (cleft[cl] > 0)
+            if (not mkd[j])
             {
+                int cl = rand[j];
+
+                mkd[cl] = true;
                 --cleft[cl];
                 cs[i] = cl;
 
                 VS stationsr = stations;
 
                 if (int up = UPL(classes[cl].improvements, stations, ce, ne, i + 1 == C); up + cp < mp)
-                    exhaustive_search_rec(i + 1, cp + up, mp, cs, cleft, stations, ce, ne, fact, classes, start, out);
+                    exhaustive_search_rec(i + 1, cp + up, mp, cs, cleft, stations, ce, ne, fact, classes, rand, mkd, start, out);
 
                 stations = stationsr;
                 // restore(stations, ne);
                 ++cleft[cl];
+                mkd[cl] = false;
             }
         }
     }
@@ -207,6 +212,25 @@ VI count_cleft(const VC &classes)
     return cleft;
 }
 
+VI gen_vec_random(int C, const VC &classes)
+{
+    int K = classes.size();
+    VI rand(C);
+    int j = 0;
+    for (int i = 0; i < K; ++i)
+    {
+        int cars = classes[i].ncars;
+        while (cars > 0)
+        {
+            rand[j] = i;
+            --cars;
+            ++j;
+        }
+    }
+    shuffle(rand.begin(), rand.end(), default_random_engine(C));
+    return rand;
+}
+
 int factorial(int n)
 {
     int result = 1;
@@ -232,11 +256,17 @@ void exhaustive_search(int C, const VI &ce, const VI &ne, const VC &classes, con
     VI cs(C); // current solution
     VI cleft = count_cleft(classes);
     VS stations = inicialize_stations(C, M);
+    VI rand = gen_vec_random(C, classes);
+    VI mkd(C, false); // marked vector of vec
     VI fact = gen_facts(ne, ce);
+    for (int i = 0; i < M; ++i)
+        cout << fact[i] << ' ';
+    cout << endl;
     int mp = INT_MAX; // minimum penalization
 
+    cout << endl;
     double start = now(); // inicialize the counter
-    exhaustive_search_rec(0, 0, mp, cs, cleft, stations, ce, ne, fact, classes, start, out);
+    exhaustive_search_rec(0, 0, mp, cs, cleft, stations, ce, ne, fact, classes, rand, mkd, start, out);
 }
 
 void read_input(is &in, int &C, int &M, int &K, VI &ce, VI &ne, VC &classes)
