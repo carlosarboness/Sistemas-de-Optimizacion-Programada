@@ -2,251 +2,255 @@
 #include <vector>
 #include <climits>
 #include <chrono>
-#include <queue>
 #include <cassert>
 #include <fstream>
-using namespace std::chrono;
+#include <algorithm>
 using namespace std;
+
+struct Class;
+struct Station;
 
 using VI = vector<int>;
 using VD = vector<double>;
+using VC = vector<Class>;
+using VS = vector<Station>;
 using MD = vector<VD>;
+using is = ifstream;
+using os = ofstream;
 
-double now()
+int UNDEF = -1;
+
+struct Class
+{
+  int id, ncars;
+  VI improvements;
+};
+
+struct Station
+{
+  int requirements;
+  VI line;
+};
+
+struct fit
+{
+  int id_car = UNDEF, cl = UNDEF;
+  double cost = UNDEF;
+};
+
+double
+now()
 {
   return clock() / double(CLOCKS_PER_SEC);
 }
 
-ofstream open(const string &s)
+os open(const string &out)
 {
-  ofstream f;
-  f.open(s, ofstream::out | ofstream::trunc);
+  os f;
+  f.open(out, os::out | os::trunc);
   f.setf(ios::fixed);
   f.precision(1);
   return f;
 }
 
-struct Class
+void write_solution(const VI &cs, int cp, const double &elapsed_time, const string &out)
 {
-  int id, n; // id and # of cars of the Class
-  VI imp;    // improvements
-};
+  os f = open(out);
+  f << cp << " " << elapsed_time << endl;
 
-struct Pen
-{
-  int sum;      // suma total de 1's que hi ha dins la cua
-  queue<int> q; // cua que conté els últims ne elements
-};
+  f << cs[0];
+  for (int i = 1; i < cs.size(); ++i)
+    f << " " << cs[i];
 
-/*
-Writes the solution in corrent_sol with penalitation pen that took time seconts to be
-found in the ouput file s with the appropiate format
-*/
-void write_solution(const VI &current_sol, int pen, const double &time, const string &s)
-{
-  ofstream f = open(s);
-  f << pen << " " << time << endl;
-  bool primer = true;
-  for (auto &b : current_sol)
-  {
-    if (primer)
-      primer = false;
-    else
-      f << " ";
-    f << b;
-  }
   f << endl;
+
   f.close();
 }
 
-/*
-Returns the aproximate cost of going from a car with the improvements of imp_i to a
-car with the improvemnts of imp_j. The aproximate cost is the sum of ne/ce ot the
-improvments that both cars have.
-*/
+/* Updates each individual line and retuns the penalitzations of it */
+int add_car(int bit, Station &st, int ce, int ne, bool end)
+{
+
+  // update the window
+  int uw = st.line.size() - ne;
+  if (uw >= 0)
+    st.requirements -= st.line[uw];
+
+  st.line.push_back(bit);
+  st.requirements += bit;
+
+  int penalitzation = max(st.requirements - ce, 0);
+  // we add to the penalitzarions the final windows
+  if (end)
+  {
+    ++uw;
+    for (; st.requirements > 0; ++uw)
+    {
+      st.requirements -= st.line[uw];
+      penalitzation += max(st.requirements - ce, 0);
+    }
+  }
+  return penalitzation;
+}
+
+int update_station(const VI &imp, VS &stations, const VI &ce, const VI &ne, bool end)
+{
+  int M = ce.size();
+  int total_penalization = 0;
+  for (int i = 0; i < M; ++i)
+    total_penalization += add_car(imp[i], stations[i], ce[i], ne[i], end);
+  return total_penalization;
+}
+
+/* Returns a vector with the inicialized stations of the algorithm. Firstly the requiremnts are
+equal to zero and the line is empty */
+VS inicialize_stations(int C, int M)
+{
+  VS stations(M);
+
+  int requirements = 0;
+  VI inicial_line;
+  inicial_line.reserve(C);
+
+  for (Station &st : stations)
+    st = Station{requirements, inicial_line};
+
+  return stations;
+}
+
+int count_penalization(const VI &sol, int C, const VI &ce, const VI &ne, const VC &classes)
+{
+  int K = classes.size();
+  int M = ne.size();
+  VS stations = inicialize_stations(C, M);
+
+  int total_penalization = 0;
+  for (int i = 0; i < C; ++i)
+    total_penalization += update_station(classes[sol[i]].improvements, stations, ce, ne, i == C - 1);
+  return total_penalization;
+}
+
+// returns the argmax of VI
+int most_cleft_index(const VI &cleft)
+{
+  auto it = max_element(cleft.begin(), cleft.end());
+  return distance(cleft.begin(), it);
+}
+
+int best_fit(VI &cleft, const VD &costs)
+{
+  int K = cleft.size();
+
+  fit bf;
+
+  for (int i = 0; i < K; ++i)
+    if (cleft[i] > bf.cl or (cleft[i] == bf.cl and costs[i] < bf.cost))
+      bf = fit{i, cleft[i], costs[i]};
+
+  --cleft[bf.id_car];
+  return bf.id_car;
+}
+
 double calculate_cost(const VI &ce, const VI &ne, const VI &imp_i, const VI &imp_j)
 {
   double cost = 0;
-  int M = imp_i.size();
+  int M = ce.size();
   for (int k = 0; k < M; ++k)
-    if (imp_i[k] == imp_j[k])
+    if (imp_i[k] == 1 and imp_j[k] == 1)
       cost += ne[k] / ce[k];
   return cost;
 }
 
-/*
-Returns the argmax of the vector v
-*/
-int argmax_VI(const VI &v)
+MD generate_costs_matrix(int K, const VI &ce, const VI &ne, const VC &classes)
 {
-  int n = v.size();
-  int k = -1;
-  int max_elem = 0;
-  for (int i = 0; i < n; ++i)
-    if (v[i] > max_elem)
-    {
-      max_elem = v[i];
-      k = i;
-    }
-  return k;
-}
-
-/*
-Returns the class of the car that is written next in the solution following the greedy algorithm
-*/
-int conditions(int last_car, VI &cars_left, const VD &costs)
-{
-  int K = cars_left.size();
-  int cl = 0;
-  double cost = -1;
-  int id_car = -1;
-  for (int i = 0; i < K; ++i)
-  {
-
-    if (cars_left[i] > cl or (cars_left[i] == cl and costs[i] < cost))
-    {
-      id_car = i;
-      cl = cars_left[i];
-      cost = costs[i];
-    }
-  }
-  --cars_left[id_car];
-  return id_car;
-}
-
-/*
-Returns the vector with the solution following the greedy algorithm
-*/
-VI gen_sol(int C, const VI &ce, const VI &ne, const vector<Class> &classes)
-{
-  // Generate data structues
-  int K = classes.size();
-  VI cars_left(K);
-  for (int i = 0; i < K; ++i)
-    cars_left[i] = classes[i].n;
-  MD costs(K, VD(K)); // matrix where in the position [i][j] stores the approximate cost of going from i to j
+  MD costs(K, VD(K));
   for (int i = 0; i < K; ++i)
     for (int j = i; j < K; ++j)
-      costs[i][j] = costs[j][i] = calculate_cost(ce, ne, classes[i].imp, classes[j].imp);
-  VI solution(C);
+    {
+      double c = calculate_cost(ce, ne, classes[i].improvements, classes[j].improvements);
+      costs[i][j] = costs[j][i] = c;
+    }
+  return costs;
+}
+
+/* Returns a vector containing for each index the number of cars that are left for that class */
+VI count_cleft(const VC &classes)
+{
+  int K = classes.size();
+  VI cleft(K);
+  for (int i = 0; i < K; ++i)
+    cleft[i] = classes[i].ncars;
+  return cleft;
+}
+
+VI gen_sol(int C, const VI &ce, const VI &ne, const VC &classes)
+{
+
+  int K = classes.size();
+  int M = ne.size();
+
+  VI cleft = count_cleft(classes);
+  MD costs = generate_costs_matrix(K, ce, ne, classes);
 
   // Calculate solution
-  solution[0] = argmax_VI(cars_left);
-  --cars_left[solution[0]];
+  VI solution(C);
+  solution[0] = most_cleft_index(cleft);
+  --cleft[solution[0]];
+
   for (int k = 1; k < C; ++k)
-    solution[k] = conditions(solution[k - 1], cars_left, costs[solution[k - 1]]);
+    solution[k] = best_fit(cleft, costs[solution[k - 1]]);
+
   return solution;
 }
 
-/*
-Returns the penalization of adding the improvment improv
-and updates the Pen pena
-*/
-int count_pen_millora(int improv, Pen &pena, int ce_i, bool final)
-{
-  pena.sum -= pena.q.front();
-  pena.q.pop();
-  pena.q.push(improv);
-  pena.sum += improv;
-  int pen = max(pena.sum - ce_i, 0);
-  if (final and pen > 0) // if is the final car of the solution, the queue is emptied
-  {
-    while (not pena.q.empty())
-    {
-      pena.sum -= pena.q.front();
-      pena.q.pop();
-      pen += max(pena.sum - ce_i, 0);
-    }
-  }
-  return pen;
-}
-
-/*
-Returns the penalization of adding in the solution the class
-with improvment imp and updates the vector of Pen pens
-*/
-int count_pen_tot(const VI &imp, vector<Pen> &pens, const VI ce, bool final)
-{
-  int M = pens.size();
-  int pen_tot = 0;
-  for (int j = 0; j < M; ++j)
-    pen_tot += count_pen_millora(imp[j], pens[j], ce[j], final);
-  return pen_tot;
-}
-
-/*
-Returns the penalization of the soltion sol
-*/
-int count_pen(const vector<int> &sol, int C, const VI &ce, const VI &ne, const vector<Class> &classes)
-{
-  int M = ne.size();
-  int total_pen = 0;
-  vector<Pen> pens(M); // Data structure to calculate the penalizations
-  for (int i = 0; i < M; ++i)
-  {
-    pens[i].sum = 0;
-    for (int j = 0; j < ne[i]; ++j)
-      pens[i].q.push(0);
-  }
-  for (int i = 0; i < C; ++i)
-    total_pen += count_pen_tot(classes[sol[i]].imp, pens, ce, i == C - 1);
-  return total_pen;
-}
-
-/*
-Given an imput in the data structures, writes the solution following the greedy algorithm with
-its cost and the time it took to calculate it
-
-The greedy algorithm is the following:
-  - A car of the class with more cars left is added to the solution. If there is more than one maximum
-    the car added is the one that has the less aproximate cost given the last car added to the solution.
-    If there is still a draw, the car with the smallest id is added.
-*/
 void greedy(const string &s, int C, const VI &ce, const VI &ne, const vector<Class> &classes)
 {
   double start = now();
   VI solution = gen_sol(C, ce, ne, classes);
   double end = now();
-  int pen = count_pen(solution, C, ce, ne, classes);
-  double elapsed_time = end - start;
-  write_solution(solution, pen, elapsed_time, s);
+  int penalization = count_penalization(solution, C, ce, ne, classes);
+  write_solution(solution, penalization, end - start, s);
 }
 
-/*
-Reads the input from the input file f and stores the data in the corresponding data structure
-*/
-void read_input(ifstream &f, int &C, int &M, int &K, VI &ce, VI &ne, vector<Class> &classes)
+void read_input(is &in, int &C, int &M, int &K, VI &ce, VI &ne, VC &classes)
 {
-  f >> C >> M >> K;
+  in >> C >> M >> K;
+
   ce.resize(M);
   ne.resize(M);
   classes.resize(K);
+
   for (auto &capacity : ce)
-    f >> capacity;
-  for (auto &num_cars : ne)
-    f >> num_cars;
+    in >> capacity;
+  for (auto &window : ne)
+    in >> window;
+
   for (int i = 0; i < K; ++i)
   {
-    f >> classes[i].id >> classes[i].n;
-    VI imp(M);
-    for (auto &imprv : imp)
-      f >> imprv;
-    classes[i].imp = imp;
+    in >> classes[i].id >> classes[i].ncars;
+    VI improvements(M);
+    for (auto &bit : improvements)
+      in >> bit;
+    classes[i].improvements = improvements;
   }
 }
 
 int main(int argc, char *argv[])
 {
 
-  assert(argc == 3);
+  if (argc != 3)
+  {
+    cout << "Syntax: " << argv[0] << " input_file output_file" << endl;
+    exit(1);
+  }
 
-  ifstream f(argv[1]);
+  ifstream in(argv[1]);
 
   int C, M, K;
   VI ce, ne;
-  vector<Class> classes;
+  VC classes;
 
-  read_input(f, C, M, K, ce, ne, classes);
+  read_input(in, C, M, K, ce, ne, classes);
 
   greedy(argv[2], C, ce, ne, classes);
 }
