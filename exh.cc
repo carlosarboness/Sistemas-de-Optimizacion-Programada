@@ -55,16 +55,16 @@ void write_solution(const VI &cs, int cp, const double &elapsed_time, const stri
   f.close();
 }
 
-void restore(VS &stations, const VI &ne)
+void restore(VS &st, const VI &ne)
 {
   int M = ne.size();
   for (int i = 0; i < M; ++i)
   {
-    int n = stations[i].line.size();
-    stations[i].requirements -= stations[i].line[n - 1];
-    if (n - ne[i] >= 0)
-      stations[i].requirements += stations[i].line[n - ne[i]];
-    stations[i].line.pop_back();
+    int n = st[i].line.size();
+    st[i].requirements -= st[i].line[n - 1];
+    if (n - ne[i] - 1 >= 0)
+      st[i].requirements += st[i].line[n - ne[i] - 1];
+    st[i].line.pop_back();
   }
 }
 
@@ -90,10 +90,11 @@ int update_station(int bit, Station &st, int ce, int ne, bool end)
   if (end)
   {
     ++uw;
-    for (; st.requirements > 0; ++uw)
+    int rec = st.requirements;
+    for (; rec > 0; ++uw)
     {
-      st.requirements -= st.line[uw];
-      penalitzation += max(st.requirements - ce, 0);
+      rec -= st.line[uw];
+      penalitzation += max(rec - ce, 0);
     }
   }
   return penalitzation;
@@ -124,15 +125,15 @@ int lb_station(int j, int i, const VI &cs, const VI &cleft, int ce, int ne, cons
 {
   int C = cs.size();
   int initial_zeros = 0;
-  for (int k = i; cs[k] == 0 and k >= 0; --k)
+  for (int k = i; k >= 0 and classes[cs[k]].improvements[j] == 0; --k)
     ++initial_zeros;
 
-  initial_zeros = max(ne - ce - initial_zeros, 0);
+  initial_zeros = max(ne - ce, 0);
   int ones = calculate_ones(j, cleft, classes);
   int zeros = (C - i - 1) - ones - initial_zeros;
 
   if (zeros < 0)
-    return (ones - ne + 1) * (ne - ce) + 2 * geom_sum(ne - ce - 1) + (-zeros);
+    return (ones - ne + 1) * (ne - ce) + 2 * geom_sum(ne - ce - 1); //+ geom_sum(-zeros);
 
   ones -= ce;
   while (zeros > 0 and ones > 0)
@@ -142,7 +143,7 @@ int lb_station(int j, int i, const VI &cs, const VI &cleft, int ce, int ne, cons
   }
 
   if (zeros <= 0 and ones > 0)
-    return (ones - ne + 1) * (ne - ce) + 2 * geom_sum(ne - ce - 1) + (-zeros);
+    return (ones - ne + 1) * (ne - ce) + 2 * geom_sum(ne - ce - 1) + geom_sum(-zeros);
 
   return 0;
 }
@@ -169,7 +170,7 @@ void exhaustive_search_rec(int i, int cp, int &mp, VI &cs, VI &cleft, VS &statio
     mp = cp;
     write_solution(cs, cp, now() - start, out);
   }
-  else if (lower_bound(i - 1, cp, cs, cleft, ce, ne, classes) < mp)
+  if (lower_bound(i - 1, cp, cs, cleft, ce, ne, classes) < mp)
   {
     for (int cl = 0; cl < K; ++cl)
     {
@@ -178,14 +179,13 @@ void exhaustive_search_rec(int i, int cp, int &mp, VI &cs, VI &cleft, VS &statio
         --cleft[cl];
         cs[i] = cl;
 
-        VS stationsr = stations;
+        // VS stationsr = stations;
 
         if (int up = UPL(classes[cl].improvements, stations, ce, ne, i + 1 == C); up + cp < mp)
           exhaustive_search_rec(i + 1, cp + up, mp, cs, cleft, stations, ce, ne, classes, start, out);
 
-        stations = stationsr;
-        // restore(stations, ne);
-
+        // stations = stationsr;
+        restore(stations, ne);
         ++cleft[cl];
       }
     }
