@@ -38,8 +38,7 @@ struct fit
   double cost = UNDEF;
 };
 
-double
-now()
+double now()
 {
   return clock() / double(CLOCKS_PER_SEC);
 }
@@ -139,11 +138,9 @@ int most_cleft_index(const VI &cleft)
 
 int best_fit(VI &cleft, const VD &costs)
 {
-  int K = cleft.size();
-
   fit bf;
 
-  for (int i = 0; i < K; ++i)
+  for (int i = 0; i < cleft.size(); ++i)
     if (cleft[i] > bf.cl or (cleft[i] == bf.cl and costs[i] < bf.cost))
       bf = fit{i, cleft[i], costs[i]};
 
@@ -154,10 +151,11 @@ int best_fit(VI &cleft, const VD &costs)
 double calculate_cost(const VI &ce, const VI &ne, const VI &imp_i, const VI &imp_j)
 {
   double cost = 0;
-  int M = ce.size();
-  for (int k = 0; k < M; ++k)
+
+  for (int k = 0; k < ce.size(); ++k)
     if (imp_i[k] == 1 and imp_j[k] == 1)
       cost += ne[k] / ce[k];
+
   return cost;
 }
 
