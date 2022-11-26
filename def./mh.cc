@@ -201,25 +201,62 @@ VI gen_sol(int C, const VI &ce, const VI &ne, const VC &classes)
 bool improve(VI &solution, int &penalization, const VI &ce, const VI &ne, const VC &classes)
 {
   int C = solution.size();
-  for (int i = 0; i < C; ++i)
+
+  bool first_improvement = false;
+
+  if (first_improvement)
   {
-    for (int j = 0; j < C; ++j)
+    for (int i = 0; i < C; ++i)
     {
-      if (i != j)
+      for (int j = 0; j < C; ++j)
       {
-        VI solutionMH = solution;
-        solutionMH[j] = solution[i];
-        solutionMH[i] = solution[j];
-        if (int cp = count_penalization(solutionMH, C, ce, ne, classes); cp < penalization)
+        if (i != j)
         {
-          solution = solutionMH;
-          penalization = cp;
-          return true;
+          VI solutionMH = solution;
+          solutionMH[j] = solution[i];
+          solutionMH[i] = solution[j];
+          if (int cp = count_penalization(solutionMH, C, ce, ne, classes); cp < penalization)
+          {
+            solution = solutionMH;
+            penalization = cp;
+            return true;
+          }
         }
       }
     }
+    return false;
   }
-  return false;
+  else
+  {
+    int bpenalization;
+    VI bsolutionMH;
+
+    for (int i = 0; i < C; ++i)
+    {
+      for (int j = 0; j < C; ++j)
+      {
+        if (i != j)
+        {
+          VI solutionMH = solution;
+          solutionMH[j] = solution[i];
+          solutionMH[i] = solution[j];
+          if (int cp = count_penalization(solutionMH, C, ce, ne, classes); cp < penalization)
+          {
+            bpenalization = cp;
+            bsolutionMH = solutionMH;
+          }
+        }
+      }
+    }
+    if (bpenalization < penalization)
+    {
+      solution = bsolutionMH;
+      penalization = bpenalization;
+      return true;
+    }
+    else
+      return false;
+  }
 }
 
 void greedy(const string &s, int C, const VI &ce, const VI &ne, const VC &classes)
