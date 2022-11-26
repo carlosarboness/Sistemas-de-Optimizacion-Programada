@@ -55,16 +55,16 @@ void write_solution(const VI &cs, int cp, const double &elapsed_time, const stri
   f.close();
 }
 
-void restore(VS &stations, const VI &ne)
+void restore(VS &st, const VI &ne)
 {
   int M = ne.size();
   for (int i = 0; i < M; ++i)
   {
-    int n = stations[i].line.size();
-    stations[i].requirements -= stations[i].line[n - 1];
-    if (n - ne[i] >= 0)
-      stations[i].requirements += stations[i].line[n - ne[i]];
-    stations[i].line.pop_back();
+    int n = st[i].line.size();
+    st[i].requirements -= st[i].line[n - 1];
+    if (n - ne[i] - 1 >= 0)
+      st[i].requirements += st[i].line[n - ne[i] - 1];
+    st[i].line.pop_back();
   }
 }
 
@@ -90,10 +90,11 @@ int update_station(int bit, Station &st, int ce, int ne, bool end)
   if (end)
   {
     ++uw;
-    for (; st.requirements > 0; ++uw)
+    int req = st.requirements;
+    for (; req > 0; ++uw)
     {
-      st.requirements -= st.line[uw];
-      penalitzation += max(st.requirements - ce, 0);
+      req -= st.line[uw];
+      penalitzation += max(req - ce, 0);
     }
   }
   return penalitzation;
@@ -178,13 +179,10 @@ void exhaustive_search_rec(int i, int cp, int &mp, VI &cs, VI &cleft, VS &statio
         --cleft[cl];
         cs[i] = cl;
 
-        VS stationsr = stations;
-
         if (int up = UPL(classes[cl].improvements, stations, ce, ne, i + 1 == C); up + cp < mp)
           exhaustive_search_rec(i + 1, cp + up, mp, cs, cleft, stations, ce, ne, classes, start, out);
 
-        stations = stationsr;
-        // restore(stations, ne);
+        restore(stations, ne);
 
         ++cleft[cl];
       }
