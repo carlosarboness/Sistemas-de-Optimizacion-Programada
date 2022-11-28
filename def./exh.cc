@@ -195,6 +195,7 @@ int lb_station(int j, int i, const VI &cs, const VI &cleft, VI line, int ce, int
 
     (add_one(line, ones, zeros, req, ce) ? add_bit(line, 1, zeros, ones) : add_bit(line, 0, zeros, ones));
   }
+
   return count_penalization(line, ce, ne);
 }
 
@@ -203,11 +204,11 @@ int lower_bound(int i, int cp, const VI &cs, const VI &cleft, const VS &st, cons
   if (i == -1)
     return 0;
 
-  int lb = 0;
+  int LowerBound = 0;
   for (int j = 0; j < ne.size(); ++j)
-    lb += lb_station(j, i, cs, cleft, st[j].line, ce[j], ne[j], cl);
+    LowerBound += lb_station(j, i, cs, cleft, st[j].line, ce[j], ne[j], cl);
 
-  return lb;
+  return LowerBound;
 }
 
 void exhaustive_search_rec(int i, int cp, int &mp, VI &cs, VI &cleft, VS &stations, const VI &ce,
@@ -238,18 +239,6 @@ void exhaustive_search_rec(int i, int cp, int &mp, VI &cs, VI &cleft, VS &statio
       }
     }
   }
-  /*
-  else
-  {
-    for (int s = 0; s < i; ++s)
-    {
-      cout << cs[s] << " ";
-    }
-    cout << endl;
-    cout << lower_bound(i - 1, cp, cs, cleft, stations, ce, ne, classes) << " > " << mp << endl
-         << endl;
-  }
-  */
 }
 
 /* Returns a vector with the inicialized stations of the algorithm. Firstly the requiremnts are
