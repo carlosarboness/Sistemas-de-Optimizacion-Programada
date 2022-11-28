@@ -114,48 +114,99 @@ int UPL(const VI &improvements, VS &stations, const VI &ce, const VI &ne, bool e
 
 int calculate_ones(int j, const VI &cleft, const VC &classes)
 {
-  int K = cleft.size();
   int ones = 0;
-  for (int i = 0; i < K; ++i)
+  for (int i = 0; i < cleft.size(); ++i)
     ones += cleft[i] * classes[i].improvements[j];
   return ones;
 }
 
-int lb_station(int j, int i, const VI &cs, const VI &cleft, int ce, int ne, const VC &classes)
+int count_penalization(const VI &line, int ce, int ne)
 {
-  int C = cs.size();
-  int initial_zeros = 0;
-  for (int k = i; k >= 0 and classes[cs[k]].improvements[j] == 0; --k)
-    ++initial_zeros;
 
-  initial_zeros = max(ne - ce, 0);
-  int ones = calculate_ones(j, cleft, classes);
-  int zeros = (C - i - 1) - ones - initial_zeros;
+  int total_penalizations, requirements;
+  total_penalizations = requirements = 0;
 
-  if (zeros < 0)
-    return (ones - ne + 1) * (ne - ce) + 2 * geom_sum(ne - ce - 1); //+ geom_sum(-zeros);
-
-  ones -= ce;
-  while (zeros > 0 and ones > 0)
+  // count inicial windows
+  int uw = 0;
+  for (int i = ne; i > 0; --i)
   {
-    zeros -= (ne - ce);
-    ones -= ce;
+    requirements += line[uw];
+    total_penalizations += max(requirements - ce, 0);
+    ++uw;
   }
 
-  if (zeros <= 0 and ones > 0)
-    return (ones - ne + 1) * (ne - ce) + 2 * geom_sum(ne - ce - 1) + geom_sum(-zeros);
+  // count mid penalizations
+  for (; uw < line.size(); ++uw)
+  {
+    requirements += line[uw];
+    requirements -= line[uw - ne];
+    total_penalizations += max(requirements - ce, 0);
+  }
 
-  return 0;
+  // count end windows
+  while (requirements > 0)
+  {
+    requirements -= line[uw - ne];
+    total_penalizations += max(requirements - ce, 0);
+    ++uw;
+  }
+
+  return total_penalizations;
 }
 
-int lower_bound(int i, int cp, const VI &cs, const VI &cleft, const VI &ce, const VI &ne, const VC &classes)
+bool add_one(const VI &line, int ones, int zeros, int &req, int ce)
 {
-  if (i < 0)
+  if (ones <= 0)
+    return false;
+
+  if (zeros <= 0)
+    return true;
+
+  if (req + 1 <= ce)
+  {
+    req += 1;
+    return true;
+  }
+  return false;
+}
+
+void add_bit(VI &line, int bit, int &zeros, int &ones)
+{
+  line.push_back(bit);
+  (bit ? --ones : --zeros);
+}
+
+int lb_station(int j, int i, const VI &cs, const VI &cleft, VI line, int ce, int ne, const VC &classes)
+{
+  int C = cs.size();
+  int ones = calculate_ones(j, cleft, classes);
+  int zeros = (C - i - 1) - ones;
+
+  int req = 0;
+
+  for (int k = i; k >= 0 and k > i - ne; --k)
+    if (line[k])
+      ++req;
+
+  for (; zeros > 0 or ones > 0; ++i)
+  {
+    if (int lw = i - ne + 1; lw >= 0)
+      req -= line[lw];
+
+    (add_one(line, ones, zeros, req, ce) ? add_bit(line, 1, zeros, ones) : add_bit(line, 0, zeros, ones));
+  }
+  return count_penalization(line, ce, ne);
+}
+
+int lower_bound(int i, int cp, const VI &cs, const VI &cleft, const VS &st, const VI &ce, const VI &ne, const VC &cl)
+{
+  if (i == -1)
     return 0;
-  int M = ne.size();
-  int lb = cp;
-  for (int j = 0; j < M; ++j)
-    lb += lb_station(j, i, cs, cleft, ce[j], ne[j], classes);
+
+  int lb = 0;
+  for (int j = 0; j < ne.size(); ++j)
+    lb += lb_station(j, i, cs, cleft, st[j].line, ce[j], ne[j], cl);
+
   return lb;
 }
 
@@ -170,7 +221,7 @@ void exhaustive_search_rec(int i, int cp, int &mp, VI &cs, VI &cleft, VS &statio
     mp = cp;
     write_solution(cs, cp, now() - start, out);
   }
-  if (lower_bound(i - 1, cp, cs, cleft, ce, ne, classes) < mp)
+  if (lower_bound(i - 1, cp, cs, cleft, stations, ce, ne, classes) < mp)
   {
     for (int cl = 0; cl < K; ++cl)
     {
@@ -179,17 +230,26 @@ void exhaustive_search_rec(int i, int cp, int &mp, VI &cs, VI &cleft, VS &statio
         --cleft[cl];
         cs[i] = cl;
 
-        // VS stationsr = stations;
-
         if (int up = UPL(classes[cl].improvements, stations, ce, ne, i + 1 == C); up + cp < mp)
           exhaustive_search_rec(i + 1, cp + up, mp, cs, cleft, stations, ce, ne, classes, start, out);
 
-        // stations = stationsr;
         restore(stations, ne);
         ++cleft[cl];
       }
     }
   }
+  /*
+  else
+  {
+    for (int s = 0; s < i; ++s)
+    {
+      cout << cs[s] << " ";
+    }
+    cout << endl;
+    cout << lower_bound(i - 1, cp, cs, cleft, stations, ce, ne, classes) << " > " << mp << endl
+         << endl;
+  }
+  */
 }
 
 /* Returns a vector with the inicialized stations of the algorithm. Firstly the requiremnts are
