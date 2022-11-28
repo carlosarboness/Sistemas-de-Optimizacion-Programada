@@ -68,11 +68,6 @@ void restore(VS &st, const VI &ne)
   }
 }
 
-int geom_sum(int n)
-{
-  return (n * (n + 1)) / 2;
-}
-
 /* Updates each individual line and retuns the penalitzations of it */
 int update_station(int bit, Station &st, int ce, int ne, bool end)
 {
