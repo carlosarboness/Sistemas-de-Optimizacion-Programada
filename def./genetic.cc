@@ -176,7 +176,7 @@ MP generate_parents(int C, const VI &cleft, const VI &ce, const VI &ne, const VC
   VI parent = create_parent(C, cleft);
 
   // select the population size (it will remain constant during the iterations)
-  int psize = 20;
+  int psize = 50;
 
   MP parents(psize);
 
@@ -226,13 +226,39 @@ int most_cleft_index(const VI &cleft)
   return distance(cleft.begin(), it);
 }
 
+void adapt_solution(const VI &P, VI &child, VI &cleft, int left, int right)
+{
+  int C = P.size();
+  int j = 0;
+
+  while (j < C)
+  {
+    if (j == left)
+    {
+      j = right + 1;
+      if (j == C)
+        break;
+    }
+
+    int a = child[j];
+    if (cleft[a] > 0)
+      --cleft[a];
+    else
+    {
+      child[j] = most_cleft_index(cleft);
+      --cleft[child[j]];
+    }
+    ++j;
+  }
+}
+
 MI recombinate(const VI &P1, const VI &P2, int left, int right, const VI &cleft)
 {
   int C = P1.size();
 
-  VI children1(C);
+  VI children1 = P1;
   VI cleft1 = cleft;
-  VI children2(C);
+  VI children2 = P2;
   VI cleft2 = cleft;
 
   for (int i = left; i <= right; ++i)
@@ -243,27 +269,8 @@ MI recombinate(const VI &P1, const VI &P2, int left, int right, const VI &cleft)
     --cleft2[P1[i]];
   }
 
-  int j = 0;
-  while (j < C)
-  {
-    if (j == left)
-      j = right + 1;
-    if (j == C)
-      break;
-    children1[j] = most_cleft_index(cleft1);
-    --cleft1[children1[j]];
-  }
-
-  int k = 0;
-  while (k < C)
-  {
-    if (k == left)
-      k = right + 1;
-    if (k == C)
-      break;
-    children2[k] = most_cleft_index(cleft2);
-    --cleft1[children2[k]];
-  }
+  adapt_solution(P1, children1, cleft1, left, right);
+  adapt_solution(P2, children2, cleft2, left, right);
 
   return {children1, children2};
 }
@@ -275,28 +282,73 @@ MP recombination(const VI &P1, const VI &P2, const VI &cleft, const VI &ce, cons
   VI cuts = generate_random_cut_points(C);
 
   MI recombination = recombinate(P1, P2, cuts[0], cuts[1], cleft);
+
   Parent children1 = Parent{recombination[0], count(recombination[0], ce, ne, classes)};
   Parent children2 = Parent{recombination[1], count(recombination[1], ce, ne, classes)};
+
   return {children1, children2};
+}
+
+void swap(const VI &ch, VI &c, int i, int j)
+{
+  c[i] = ch[j];
+  c[j] = ch[i];
+}
+
+void mutate(MP &children)
+{
+  int C = children[0].solution.size();
+  random_device rd;
+  mt19937 gen(rd());
+  uniform_int_distribution<> distr(0, C - 1);
+
+  VI c1 = children[0].solution;
+  VI c2 = children[1].solution;
+
+  int i = distr(gen);
+  int j = distr(gen);
+
+  swap(c1, c1, i, j);
+  swap(c2, c2, i, j);
+
+  children[0].solution = c1;
+  children[1].solution = c2;
+}
+
+void mutation(MP &children)
+{
+  // add a mutation to the children with propability 0.01
+
+  random_device rd;
+  mt19937 gen(rd());
+  uniform_int_distribution<> distr(0, 9);
+  if (distr(gen) == distr(gen))
+    mutate(children);
 }
 
 void genetic(const string &out, int C, const VI &ce, const VI &ne, const VC &classes, const VI &cleft)
 {
+  double start = now();
+
   MP parents = generate_parents(C, count_cleft(classes), ce, ne, classes);
   Parent best_individual = find_best_individual(parents);
-  int termination_conditions = 20;
+  int termination_conditions = 100000;
 
   // termination conditions: we stop if in the last -termination_condition- generations
   // it hasn't been an improvement in the solution
   int tc = termination_conditions;
+
   while (tc > 0)
   {
-    cout << tc << endl;
     parents = select_parents(parents);
+
     Parent P1 = parents[0];
     Parent P2 = parents[1];
 
     MP children = recombination(P1.solution, P2.solution, cleft, ce, ne, classes);
+
+    mutation(children);
+
     parents[0] = children[0];
     parents[1] = children[1];
 
@@ -309,7 +361,7 @@ void genetic(const string &out, int C, const VI &ce, const VI &ne, const VC &cla
     else
       --tc;
   }
-  write_solution(best_individual.solution, best_individual.fitness, 0, out);
+  write_solution(best_individual.solution, best_individual.fitness, now() - start, out);
 }
 
 void read_input(is &in, int &C, int &M, int &K, VI &ce, VI &ne, VC &classes)
