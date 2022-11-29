@@ -221,7 +221,7 @@ int most_cleft_index(const VI &cleft)
   return distance(cleft.begin(), it);
 }
 
-void adapt_solution(VI &child, VI cleft, int left, int right)
+void adapt_solution(VI &child, VI &cleft, int left, int right)
 {
   int C = child.size();
   int j = 0;
@@ -234,9 +234,7 @@ void adapt_solution(VI &child, VI cleft, int left, int right)
       if (j == C)
         break;
     }
-
-    int a = child[j];
-    if (cleft[a] > 0)
+    if (int a = child[j]; cleft[a] > 0)
       --cleft[a];
     else
     {
@@ -328,7 +326,7 @@ void genetic(const string &out, int C, const VI &ce, const VI &ne, const VC &cla
   double start = now();
   MP parents = generate_parents(C, count_cleft(classes), ce, ne, classes);
   Parent best_individual = find_best_individual(parents);
-  int termination_conditions = 10000;
+  int termination_conditions = 100000;
 
   sort_parents(parents);
 
@@ -346,12 +344,13 @@ void genetic(const string &out, int C, const VI &ce, const VI &ne, const VC &cla
 
     mutation(children);
 
-    parents.pop_back();
-    parents.pop_back();
     parents.push_back(children[0]);
     parents.push_back(children[1]);
 
     sort_parents(parents);
+
+    parents.pop_back();
+    parents.pop_back();
 
     Parent bi = find_best_individual(parents);
 
