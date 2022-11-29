@@ -13,17 +13,12 @@ struct Station;
 struct Parent;
 
 using VI = vector<int>;
-using VD = vector<double>;
 using VC = vector<Class>;
 using VS = vector<Station>;
 using MI = vector<VI>;
 using MP = vector<Parent>;
-using MD = vector<VD>;
-using VB = vector<bool>;
 using is = ifstream;
 using os = ofstream;
-
-int UNDEF = -1;
 
 struct Class
 {
@@ -91,7 +86,6 @@ VI create_parent(int C, const VI &cleft)
     for (; cl > 0; --cl)
       parent.push_back(i);
   }
-  assert(parent.size() == C);
   return parent;
 }
 
@@ -176,7 +170,7 @@ MP generate_parents(int C, const VI &cleft, const VI &ce, const VI &ne, const VC
   VI parent = create_parent(C, cleft);
 
   // select the population size (it will remain constant during the iterations)
-  int psize = 50;
+  int psize = 20;
 
   MP parents(psize);
 
@@ -185,28 +179,29 @@ MP generate_parents(int C, const VI &cleft, const VI &ce, const VI &ne, const VC
     VI P = generate_permutation(parent);
     parents[i] = Parent{P, fitness(P, ce, ne, classes)};
   }
-
   return parents;
 }
 
 Parent find_best_individual(const MP &parents)
 {
+  int n = parents.size();
   Parent bi = Parent{{}, INT_MAX};
-  for (int i = 0; i < parents.size(); ++i)
+  for (int i = 0; i < n; ++i)
+  {
     if (parents[i].fitness < bi.fitness)
       bi = parents[i];
+  }
   return bi;
 }
 
 bool best_fit(const Parent &P1, const Parent &P2)
 {
-  return P1.fitness <= P2.fitness;
+  return P1.fitness < P2.fitness;
 }
 
-MP select_parents(MP &parents)
+void sort_parents(MP &parents)
 {
   sort(parents.begin(), parents.end(), best_fit);
-  return parents;
 }
 
 VI generate_random_cut_points(int C)
@@ -226,9 +221,9 @@ int most_cleft_index(const VI &cleft)
   return distance(cleft.begin(), it);
 }
 
-void adapt_solution(const VI &P, VI &child, VI &cleft, int left, int right)
+void adapt_solution(VI &child, VI cleft, int left, int right)
 {
-  int C = P.size();
+  int C = child.size();
   int j = 0;
 
   while (j < C)
@@ -269,8 +264,8 @@ MI recombinate(const VI &P1, const VI &P2, int left, int right, const VI &cleft)
     --cleft2[P1[i]];
   }
 
-  adapt_solution(P1, children1, cleft1, left, right);
-  adapt_solution(P2, children2, cleft2, left, right);
+  adapt_solution(children1, cleft1, left, right);
+  adapt_solution(children2, cleft2, left, right);
 
   return {children1, children2};
 }
@@ -289,14 +284,16 @@ MP recombination(const VI &P1, const VI &P2, const VI &cleft, const VI &ce, cons
   return {children1, children2};
 }
 
-void swap(const VI &ch, VI &c, int i, int j)
+void swap(VI &c, int i, int j)
 {
-  c[i] = ch[j];
-  c[j] = ch[i];
+  int z = c[i];
+  c[i] = c[j];
+  c[j] = z;
 }
 
 void mutate(MP &children)
 {
+
   int C = children[0].solution.size();
   random_device rd;
   mt19937 gen(rd());
@@ -308,8 +305,8 @@ void mutate(MP &children)
   int i = distr(gen);
   int j = distr(gen);
 
-  swap(c1, c1, i, j);
-  swap(c2, c2, i, j);
+  swap(c1, i, j);
+  swap(c2, i, j);
 
   children[0].solution = c1;
   children[1].solution = c2;
@@ -329,10 +326,11 @@ void mutation(MP &children)
 void genetic(const string &out, int C, const VI &ce, const VI &ne, const VC &classes, const VI &cleft)
 {
   double start = now();
-
   MP parents = generate_parents(C, count_cleft(classes), ce, ne, classes);
   Parent best_individual = find_best_individual(parents);
-  int termination_conditions = 100000;
+  int termination_conditions = 10000;
+
+  sort_parents(parents);
 
   // termination conditions: we stop if in the last -termination_condition- generations
   // it hasn't been an improvement in the solution
@@ -340,7 +338,6 @@ void genetic(const string &out, int C, const VI &ce, const VI &ne, const VC &cla
 
   while (tc > 0)
   {
-    parents = select_parents(parents);
 
     Parent P1 = parents[0];
     Parent P2 = parents[1];
@@ -349,10 +346,15 @@ void genetic(const string &out, int C, const VI &ce, const VI &ne, const VC &cla
 
     mutation(children);
 
-    parents[0] = children[0];
-    parents[1] = children[1];
+    parents.pop_back();
+    parents.pop_back();
+    parents.push_back(children[0]);
+    parents.push_back(children[1]);
+
+    sort_parents(parents);
 
     Parent bi = find_best_individual(parents);
+
     if (bi.fitness < best_individual.fitness)
     {
       best_individual = bi;
