@@ -167,7 +167,7 @@ int fitness(const VI &P, const VI &ce, const VI &ne, const VC &classes)
 
 MP generate_parents(int C, const VI &cleft, const VI &ce, const VI &ne, const VC &classes)
 {
-  VI parent = create_parent(C, cleft);
+  VI P = create_parent(C, cleft);
 
   // select the population size (it will remain constant during the iterations)
   int psize = 20;
@@ -176,7 +176,7 @@ MP generate_parents(int C, const VI &cleft, const VI &ce, const VI &ne, const VC
 
   for (int i = 0; i < psize; ++i)
   {
-    VI P = generate_permutation(parent);
+    P = generate_permutation(P);
     parents[i] = Parent{P, fitness(P, ce, ne, classes)};
   }
   return parents;
@@ -245,15 +245,87 @@ void adapt_solution(VI &child, VI &cleft, int left, int right)
   }
 }
 
+void adapt_solution2(VI &child, VI &cleft, int left, int right)
+{
+  int C = child.size();
+
+  for (int j = left; j <= right; ++j)
+  {
+    if (int a = child[j]; cleft[a] > 0)
+      --cleft[a];
+    else
+    {
+      child[j] = most_cleft_index(cleft);
+      --cleft[child[j]];
+    }
+  }
+}
+
+VI uniform(const VI &P1, const VI &P2, VI cleft)
+{
+  random_device rd;
+  mt19937 gen(rd());
+  uniform_int_distribution<> distr(1, 2);
+
+  VI child(P1.size());
+
+  for (int i = 0; i < P1.size(); ++i)
+  {
+    if (distr(gen) == 0)
+    {
+      int a = P1[i];
+      if (cleft[a] > 0)
+      {
+        child[i] = a;
+        --cleft[a];
+      }
+      else if (cleft[P2[i]] > 0)
+      {
+        child[i] = P2[i];
+        --cleft[P2[i]];
+      }
+      else
+      {
+        int b = most_cleft_index(cleft);
+        child[i] = b;
+        --cleft[b];
+      }
+    }
+    else
+    {
+      int a = P2[i];
+      if (cleft[a] > 0)
+      {
+        child[i] = a;
+        --cleft[a];
+      }
+      else if (cleft[P1[i]] > 0)
+      {
+        child[i] = P1[i];
+        --cleft[P1[i]];
+      }
+      else
+      {
+        int b = most_cleft_index(cleft);
+        child[i] = b;
+        --cleft[b];
+      }
+    }
+  }
+  return child;
+}
+
 MI recombinate(const VI &P1, const VI &P2, int left, int right, const VI &cleft)
 {
   int C = P1.size();
 
-  VI children1 = P1;
-  VI cleft1 = cleft;
-  VI children2 = P2;
-  VI cleft2 = cleft;
+  VI children1, children2, children3, children4;
+  children1 = children3 = P1;
+  children2 = children4 = P2;
+  VI cleft1, cleft2, cleft3, cleft4;
+  cleft1 = cleft2 = cleft3 = cleft4 = cleft;
 
+  // fisrt pair of children
   for (int i = left; i <= right; ++i)
   {
     children1[i] = P2[i];
@@ -262,10 +334,30 @@ MI recombinate(const VI &P1, const VI &P2, int left, int right, const VI &cleft)
     --cleft2[P1[i]];
   }
 
+  // second pair of children
+  for (int i = 0; i < left; ++i)
+  {
+    children3[i] = P2[i];
+    --cleft3[P2[i]];
+    children4[i] = P1[i];
+    --cleft4[P1[i]];
+  }
+  for (int i = right + 1; i < C; ++i)
+  {
+    children3[i] = P2[i];
+    --cleft3[P2[i]];
+    children4[i] = P1[i];
+    --cleft4[P1[i]];
+  }
+
   adapt_solution(children1, cleft1, left, right);
   adapt_solution(children2, cleft2, left, right);
+  adapt_solution2(children3, cleft3, left, right);
+  adapt_solution2(children4, cleft4, left, right);
 
-  return {children1, children2};
+  VI children5 = uniform(P1, P2, cleft);
+
+  return {children1, children2, children3, children4, children5};
 }
 
 MP recombination(const VI &P1, const VI &P2, const VI &cleft, const VI &ce, const VI &ne, const VC &classes)
@@ -273,20 +365,22 @@ MP recombination(const VI &P1, const VI &P2, const VI &cleft, const VI &ce, cons
   int C = P1.size();
 
   VI cuts = generate_random_cut_points(C);
-
   MI recombination = recombinate(P1, P2, cuts[0], cuts[1], cleft);
+  MP children;
+  children.reserve(5);
 
-  Parent children1 = Parent{recombination[0], count(recombination[0], ce, ne, classes)};
-  Parent children2 = Parent{recombination[1], count(recombination[1], ce, ne, classes)};
+  for (int i = 0; i < 5; ++i)
+    children.push_back(Parent{recombination[i], count(recombination[i], ce, ne, classes)});
 
-  return {children1, children2};
+  return children;
 }
 
-void swap(VI &c, int i, int j)
+void swap(Parent &P, int i, int j)
 {
-  int z = c[i];
-  c[i] = c[j];
-  c[j] = z;
+
+  int z = P.solution[i];
+  P.solution[i] = P.solution[j];
+  P.solution[j] = z;
 }
 
 void mutate(MP &children)
@@ -297,17 +391,10 @@ void mutate(MP &children)
   mt19937 gen(rd());
   uniform_int_distribution<> distr(0, C - 1);
 
-  VI c1 = children[0].solution;
-  VI c2 = children[1].solution;
-
-  int i = distr(gen);
-  int j = distr(gen);
-
-  swap(c1, i, j);
-  swap(c2, i, j);
-
-  children[0].solution = c1;
-  children[1].solution = c2;
+  for (int i = 0; i < 5; ++i)
+  {
+    swap(children[i], distr(gen), distr(gen));
+  }
 }
 
 void mutation(MP &children)
@@ -326,7 +413,7 @@ void genetic(const string &out, int C, const VI &ce, const VI &ne, const VC &cla
   double start = now();
   MP parents = generate_parents(C, count_cleft(classes), ce, ne, classes);
   Parent best_individual = find_best_individual(parents);
-  int termination_conditions = 100000;
+  int termination_conditions = 1000000;
 
   sort_parents(parents);
 
@@ -334,7 +421,7 @@ void genetic(const string &out, int C, const VI &ce, const VI &ne, const VC &cla
   // it hasn't been an improvement in the solution
   int tc = termination_conditions;
 
-  while (tc > 0)
+  while (tc > 0 and (now() - start) < 60)
   {
 
     Parent P1 = parents[0];
@@ -344,13 +431,13 @@ void genetic(const string &out, int C, const VI &ce, const VI &ne, const VC &cla
 
     mutation(children);
 
-    parents.push_back(children[0]);
-    parents.push_back(children[1]);
+    for (int i = 0; i < 5; ++i)
+      parents.push_back(children[i]);
 
     sort_parents(parents);
 
-    parents.pop_back();
-    parents.pop_back();
+    for (int i = 0; i < 5; ++i)
+      parents.pop_back();
 
     Parent bi = find_best_individual(parents);
 
