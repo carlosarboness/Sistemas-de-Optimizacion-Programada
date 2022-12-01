@@ -215,31 +215,46 @@ int lower_bound(int i, int cp, const VI &cs, const VI &cleft, const VS &st, cons
     return LowerBound;
 }
 
+VI update(VI generator, int K)
+{
+    // random_shuffle(generator.begin(), generator.end());
+
+    for (int i = 0; i < K; ++i)
+        generator[i] = (generator[i] + 1) % K;
+
+    return generator;
+}
+
 void exhaustive_search_rec(int i, int cp, int &mp, VI &cs, VI &cleft, VS &stations, const VI &ce,
-                           const VI &ne, const VC &classes, const double &start, const string &out)
+                           const VI &ne, const VC &classes, const double &start, const string &out, const VI &generator)
 {
     int C = cs.size();
     int K = classes.size();
-
-    if (i == C)
+    if (now() - start < 60)
     {
-        mp = cp;
-        write_solution(cs, mp, now() - start, out);
-    }
-    if (lower_bound(i - 1, cp, cs, cleft, stations, ce, ne, classes) < mp)
-    {
-        for (int cl = 0; cl < K; ++cl)
+        if (i == C)
         {
-            if (cleft[cl] > 0)
+            mp = cp;
+            write_solution(cs, cp, now() - start, out);
+        }
+        if (lower_bound(i - 1, cp, cs, cleft, stations, ce, ne, classes) < mp)
+        {
+            for (int cl : generator)
             {
-                --cleft[cl];
-                cs[i] = cl;
+                if (cleft[cl] > 0)
+                {
+                    --cleft[cl];
+                    cs[i] = cl;
 
-                if (int up = UPL(classes[cl].improvements, stations, ce, ne, i + 1 == C); up + cp < mp)
-                    exhaustive_search_rec(i + 1, cp + up, mp, cs, cleft, stations, ce, ne, classes, start, out);
+                    if (int up = UPL(classes[cl].improvements, stations, ce, ne, i + 1 == C); up + cp < mp)
+                    {
+                        exhaustive_search_rec(i + 1, cp + up, mp, cs, cleft, stations, ce, ne, classes, start, out,
+                                              update(generator, K));
+                    }
 
-                restore(stations, ne);
-                ++cleft[cl];
+                    restore(stations, ne);
+                    ++cleft[cl];
+                }
             }
         }
     }
@@ -318,7 +333,6 @@ VI gen_sol(int C, const VI &ce, const VI &ne, const VC &classes)
 
     VI cleft = count_cleft(classes);
     MD costs = generate_costs_matrix(classes.size(), ce, ne, classes);
-
     // Calculate solution
     VI solution(C);
 
@@ -377,17 +391,28 @@ int count_penalization_cs(const VI &sol, int C, const VI &ce, const VI &ne, cons
 }
 //
 
+VI create_generator(int K)
+{
+    VI generator(K);
+    for (int i = 0; i < K; ++i)
+        generator[i] = i;
+    return generator;
+}
+
 void exhaustive_search(int C, const VI &ce, const VI &ne, const VC &classes, const string &out)
 {
     int M = ce.size();
 
     VI cleft = count_cleft(classes);
     VS stations = inicialize_stations(C, M);
+    VI generator = create_generator(cleft.size());
+
     double start = now();                                   // inicialize the counter
     VI cs = gen_sol(C, ce, ne, classes);                    // current solution
     int mp = count_penalization_cs(cs, C, ce, ne, classes); // minimum penalization
     write_solution(cs, mp, now() - start, out);
-    exhaustive_search_rec(0, 0, mp, cs, cleft, stations, ce, ne, classes, start, out);
+
+    exhaustive_search_rec(0, 0, mp, cs, cleft, stations, ce, ne, classes, start, out, generator);
 }
 
 void read_input(is &in, int &C, int &M, int &K, VI &ce, VI &ne, VC &classes)
