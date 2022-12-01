@@ -4,6 +4,8 @@
 #include <chrono>
 #include <cassert>
 #include <fstream>
+#include <random>
+#include <algorithm>
 using namespace std;
 
 struct Class;
@@ -66,11 +68,6 @@ void restore(VS &st, const VI &ne)
       st[i].requirements += st[i].line[n - ne[i] - 1];
     st[i].line.pop_back();
   }
-}
-
-int geom_sum(int n)
-{
-  return (n * (n + 1)) / 2;
 }
 
 /* Updates each individual line and retuns the penalitzations of it */
@@ -154,59 +151,46 @@ int count_penalization(const VI &line, int ce, int ne)
   return total_penalizations;
 }
 
+bool add_one(const VI &line, int ones, int zeros, int &req, int ce)
+{
+  if (ones <= 0)
+    return false;
+
+  if (zeros <= 0)
+    return true;
+
+  if (req + 1 <= ce)
+  {
+    req += 1;
+    return true;
+  }
+  return false;
+}
+
+void add_bit(VI &line, int bit, int &zeros, int &ones)
+{
+  line.push_back(bit);
+  (bit ? --ones : --zeros);
+}
+
 int lb_station(int j, int i, const VI &cs, const VI &cleft, VI line, int ce, int ne, const VC &classes)
 {
   int C = cs.size();
   int ones = calculate_ones(j, cleft, classes);
   int zeros = (C - i - 1) - ones;
 
-  if (i < ne)
+  int req = 0;
+
+  for (int k = i; k >= 0 and k > i - ne; --k)
+    if (line[k])
+      ++req;
+
+  for (; zeros > 0 or ones > 0; ++i)
   {
-    int first_ones = 0;
-    for (int k = 0; k <= i; ++k)
-      if (line[k])
-        ++first_ones;
+    if (int lw = i - ne + 1; lw >= 0)
+      req -= line[lw];
 
-    for (int k = ce - first_ones; k > 0 and ones > 0; --k)
-    {
-      --ones;
-      line.push_back(1);
-      ++i;
-    }
-  }
-  for (; i < ne; ++i)
-  {
-    --zeros;
-    line.push_back(0);
-  }
-
-  while (zeros > 0 and ones > 0)
-  {
-    int bit = line[i - ne + 1];
-    line.push_back(bit);
-    (bit ? --ones : --zeros);
-    ++i;
-  }
-
-  for (; zeros > 0; --zeros)
-    line.push_back(0);
-
-  for (; ones > 0; --ones)
-    line.push_back(1);
-
-  if (cs[0] == 2 and cs[1] == 1 and cs[2] == 3 and cs[3] == 1 and cs[4] == 2 and cs[5] == 0 and cs[6] == 2)
-  {
-    cout << j << ":   ";
-
-    for (int s = 0; s <= i; ++s)
-      cout << line[s] << " ";
-
-    cout << " | ";
-
-    for (int s = i + 1; s < line.size(); ++s)
-
-      cout << line[s] << " ";
-    cout << "  ce: " << ce << "  ne: " << ne << "   pen: " << count_penalization(line, ce, ne) << endl;
+    (add_one(line, ones, zeros, req, ce) ? add_bit(line, 1, zeros, ones) : add_bit(line, 0, zeros, ones));
   }
 
   return count_penalization(line, ce, ne);
@@ -217,15 +201,20 @@ int lower_bound(int i, int cp, const VI &cs, const VI &cleft, const VS &st, cons
   if (i == -1)
     return 0;
 
-  int lb = 0;
+  int LowerBound = 0;
   for (int j = 0; j < ne.size(); ++j)
-    lb += lb_station(j, i, cs, cleft, st[j].line, ce[j], ne[j], cl);
+    LowerBound += lb_station(j, i, cs, cleft, st[j].line, ce[j], ne[j], cl);
 
-  return lb;
+  return LowerBound;
+}
+
+void update(VI &generator, int K)
+{
+  random_shuffle(generator.begin(), generator.end());
 }
 
 void exhaustive_search_rec(int i, int cp, int &mp, VI &cs, VI &cleft, VS &stations, const VI &ce,
-                           const VI &ne, const VC &classes, const double &start, const string &out)
+                           const VI &ne, const VC &classes, const double &start, const string &out, VI &generator)
 {
   int C = cs.size();
   int K = classes.size();
@@ -237,7 +226,7 @@ void exhaustive_search_rec(int i, int cp, int &mp, VI &cs, VI &cleft, VS &statio
   }
   if (lower_bound(i - 1, cp, cs, cleft, stations, ce, ne, classes) < mp)
   {
-    for (int cl = 0; cl < K; ++cl)
+    for (int cl : generator)
     {
       if (cleft[cl] > 0)
       {
@@ -245,25 +234,16 @@ void exhaustive_search_rec(int i, int cp, int &mp, VI &cs, VI &cleft, VS &statio
         cs[i] = cl;
 
         if (int up = UPL(classes[cl].improvements, stations, ce, ne, i + 1 == C); up + cp < mp)
-          exhaustive_search_rec(i + 1, cp + up, mp, cs, cleft, stations, ce, ne, classes, start, out);
+        {
+          update(generator, K);
+          exhaustive_search_rec(i + 1, cp + up, mp, cs, cleft, stations, ce, ne, classes, start, out, generator);
+        }
 
         restore(stations, ne);
         ++cleft[cl];
       }
     }
   }
-  /*
-  else
-  {
-    for (int s = 0; s < i; ++s)
-    {
-      cout << cs[s] << " ";
-    }
-    cout << endl;
-    cout << lower_bound(i - 1, cp, cs, cleft, stations, ce, ne, classes) << " > " << mp << endl
-         << endl;
-  }
-  */
 }
 
 /* Returns a vector with the inicialized stations of the algorithm. Firstly the requiremnts are
@@ -292,6 +272,14 @@ VI count_cleft(const VC &classes)
   return cleft;
 }
 
+VI create_generator(int K)
+{
+  VI generator(K);
+  for (int i = 0; i < K; ++i)
+    generator[i] = i;
+  return generator;
+}
+
 void exhaustive_search(int C, const VI &ce, const VI &ne, const VC &classes, const string &out)
 {
   int M = ce.size();
@@ -299,10 +287,11 @@ void exhaustive_search(int C, const VI &ce, const VI &ne, const VC &classes, con
   VI cs(C); // current solution
   VI cleft = count_cleft(classes);
   VS stations = inicialize_stations(C, M);
+  VI generator = create_generator(cleft.size());
   int mp = INT_MAX; // minimum penalization
 
   double start = now(); // inicialize the counter
-  exhaustive_search_rec(0, 0, mp, cs, cleft, stations, ce, ne, classes, start, out);
+  exhaustive_search_rec(0, 0, mp, cs, cleft, stations, ce, ne, classes, start, out, generator);
 }
 
 void read_input(is &in, int &C, int &M, int &K, VI &ce, VI &ne, VC &classes)
