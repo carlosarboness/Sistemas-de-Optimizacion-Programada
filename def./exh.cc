@@ -4,6 +4,8 @@
 #include <chrono>
 #include <cassert>
 #include <fstream>
+#include <random>
+#include <algorithm>
 using namespace std;
 
 struct Class;
@@ -206,8 +208,18 @@ int lower_bound(int i, int cp, const VI &cs, const VI &cleft, const VS &st, cons
   return LowerBound;
 }
 
+VI update(VI generator, int K)
+{
+  random_shuffle(generator.begin(), generator.end());
+  /*
+  for (int i = 0; i < K; ++i)
+    generator[i] = (generator[i] + 1) % K;
+    */
+  return generator;
+}
+
 void exhaustive_search_rec(int i, int cp, int &mp, VI &cs, VI &cleft, VS &stations, const VI &ce,
-                           const VI &ne, const VC &classes, const double &start, const string &out)
+                           const VI &ne, const VC &classes, const double &start, const string &out, const VI &generator)
 {
   int C = cs.size();
   int K = classes.size();
@@ -219,7 +231,7 @@ void exhaustive_search_rec(int i, int cp, int &mp, VI &cs, VI &cleft, VS &statio
   }
   if (lower_bound(i - 1, cp, cs, cleft, stations, ce, ne, classes) < mp)
   {
-    for (int cl = 0; cl < K; ++cl)
+    for (int cl : generator)
     {
       if (cleft[cl] > 0)
       {
@@ -227,7 +239,10 @@ void exhaustive_search_rec(int i, int cp, int &mp, VI &cs, VI &cleft, VS &statio
         cs[i] = cl;
 
         if (int up = UPL(classes[cl].improvements, stations, ce, ne, i + 1 == C); up + cp < mp)
-          exhaustive_search_rec(i + 1, cp + up, mp, cs, cleft, stations, ce, ne, classes, start, out);
+        {
+          exhaustive_search_rec(i + 1, cp + up, mp, cs, cleft, stations, ce, ne, classes, start, out,
+                                update(generator, K));
+        }
 
         restore(stations, ne);
         ++cleft[cl];
@@ -262,6 +277,14 @@ VI count_cleft(const VC &classes)
   return cleft;
 }
 
+VI create_generator(int K)
+{
+  VI generator(K);
+  for (int i = 0; i < K; ++i)
+    generator[i] = i;
+  return generator;
+}
+
 void exhaustive_search(int C, const VI &ce, const VI &ne, const VC &classes, const string &out)
 {
   int M = ce.size();
@@ -269,10 +292,11 @@ void exhaustive_search(int C, const VI &ce, const VI &ne, const VC &classes, con
   VI cs(C); // current solution
   VI cleft = count_cleft(classes);
   VS stations = inicialize_stations(C, M);
+  VI generator = create_generator(cleft.size());
   int mp = INT_MAX; // minimum penalization
 
   double start = now(); // inicialize the counter
-  exhaustive_search_rec(0, 0, mp, cs, cleft, stations, ce, ne, classes, start, out);
+  exhaustive_search_rec(0, 0, mp, cs, cleft, stations, ce, ne, classes, start, out, generator);
 }
 
 void read_input(is &in, int &C, int &M, int &K, VI &ce, VI &ne, VC &classes)
