@@ -20,6 +20,8 @@ using MP = vector<Parent>;
 using is = ifstream;
 using os = ofstream;
 
+int UNDEF = -1;
+
 struct Class
 {
   int id, ncars;
@@ -35,7 +37,8 @@ struct Station
 struct Parent
 {
   VI solution;
-  int fitness;
+  int penalization;
+  double fitness;
 };
 
 double now()
@@ -76,6 +79,67 @@ VI count_cleft(const VC &classes)
   return cleft;
 }
 
+int count_penalization(const VI &line, int ce, int ne)
+{
+
+  int total_penalizations, requirements;
+  total_penalizations = requirements = 0;
+
+  // count inicial windows
+  int uw = 0;
+  for (int i = ne; i > 0; --i)
+  {
+    requirements += line[uw];
+    total_penalizations += max(requirements - ce, 0);
+    ++uw;
+  }
+
+  // count mid penalizations
+  for (; uw < line.size(); ++uw)
+  {
+    requirements += line[uw];
+    requirements -= line[uw - ne];
+    total_penalizations += max(requirements - ce, 0);
+  }
+
+  // count end windows
+  while (requirements > 0)
+  {
+    requirements -= line[uw - ne];
+    total_penalizations += max(requirements - ce, 0);
+    ++uw;
+  }
+
+  return total_penalizations;
+}
+
+MI createSM(const VI &P, int C, int M, const VC &classes)
+{
+
+  MI SM(M, VI(C));
+  for (int i = 0; i < C; ++i)
+    for (int j = 0; j < M; ++j)
+      SM[j][i] = classes[P[i]].improvements[j];
+  return SM;
+}
+
+int penalization(const VI &P, const VI &ce, const VI &ne, const VC &classes)
+{
+  int C = P.size();
+  int M = ce.size();
+  MI stations_matrix = createSM(P, C, M, classes);
+  int total_pen = 0;
+
+  for (int i = 0; i < M; ++i)
+    total_pen += count_penalization(stations_matrix[i], ce[i], ne[i]);
+  return total_pen;
+}
+
+void generate_permutation(VI &parent)
+{
+  random_shuffle(parent.begin(), parent.end());
+}
+
 VI create_parent(int C, const VI &cleft)
 {
   VI parent;
@@ -89,114 +153,36 @@ VI create_parent(int C, const VI &cleft)
   return parent;
 }
 
-VI generate_permutation(VI parent)
-{
-  random_shuffle(parent.begin(), parent.end());
-  return parent;
-}
-
-/* Updates each individual line and retuns the penalitzations of it */
-int add(int bit, Station &st, int ce, int ne, bool end)
-{
-
-  // update the window
-  int uw = st.line.size() - ne;
-  if (uw >= 0)
-    st.requirements -= st.line[uw];
-
-  st.line.push_back(bit);
-  st.requirements += bit;
-
-  int penalitzation = max(st.requirements - ce, 0);
-  // we add to the penalitzarions the final windows
-  if (end)
-  {
-    ++uw;
-    for (; st.requirements > 0; ++uw)
-    {
-      st.requirements -= st.line[uw];
-      penalitzation += max(st.requirements - ce, 0);
-    }
-  }
-  return penalitzation;
-}
-
-int update(const VI &imp, VS &stations, const VI &ce, const VI &ne, bool end)
-{
-  int M = ce.size();
-  int total_penalization = 0;
-  for (int i = 0; i < M; ++i)
-    total_penalization += add(imp[i], stations[i], ce[i], ne[i], end);
-  return total_penalization;
-}
-
-/* Returns a vector with the inicialized stations of the algorithm. Firstly the requiremnts are
-equal to zero and the line is empty */
-VS inicialize_stations(int C, int M)
-{
-  VS stations(M);
-
-  int requirements = 0;
-  VI inicial_line;
-  inicial_line.reserve(C);
-
-  for (Station &st : stations)
-    st = Station{requirements, inicial_line};
-
-  return stations;
-}
-
-int count(const VI &P, const VI &ce, const VI &ne, const VC &classes)
-{
-  int C = P.size();
-  int K = classes.size();
-  int M = ne.size();
-  VS stations = inicialize_stations(C, M);
-
-  int total_penalization = 0;
-  for (int i = 0; i < C; ++i)
-    total_penalization += update(classes[P[i]].improvements, stations, ce, ne, i == C - 1);
-  return total_penalization;
-}
-
-int fitness(const VI &P, const VI &ce, const VI &ne, const VC &classes)
-{
-  int penalizations = count(P, ce, ne, classes);
-  return penalizations;
-}
-
 MP generate_parents(int C, const VI &cleft, const VI &ce, const VI &ne, const VC &classes)
 {
   VI P = create_parent(C, cleft);
 
   // select the population size (it will remain constant during the iterations)
-  int psize = 400;
+  int psize = 600;
 
   MP parents(psize);
 
   for (int i = 0; i < psize; ++i)
   {
-    P = generate_permutation(P);
-    parents[i] = Parent{P, fitness(P, ce, ne, classes)};
+    generate_permutation(P);
+    parents[i] = Parent{P, penalization(P, ce, ne, classes), 0};
   }
   return parents;
 }
 
-Parent find_best_individual(const MP &parents)
+bool improved(Parent &best_individual, const Parent &P)
 {
-  int n = parents.size();
-  Parent bi = Parent{{}, INT_MAX};
-  for (int i = 0; i < n; ++i)
+  if (P.fitness > best_individual.fitness)
   {
-    if (parents[i].fitness < bi.fitness)
-      bi = parents[i];
+    best_individual = P;
+    return true;
   }
-  return bi;
+  return false;
 }
 
 bool best_fit(const Parent &P1, const Parent &P2)
 {
-  return P1.fitness < P2.fitness;
+  return P1.fitness > P2.fitness;
 }
 
 void sort_parents(MP &parents)
@@ -370,52 +356,76 @@ MP recombination(const VI &P1, const VI &P2, const VI &cleft, const VI &ce, cons
   children.reserve(5);
 
   for (int i = 0; i < 5; ++i)
-    children.push_back(Parent{recombination[i], count(recombination[i], ce, ne, classes)});
+    children.push_back(Parent{recombination[i], penalization(recombination[i], ce, ne, classes), 0});
 
   return children;
-}
-
-void swap(Parent &P, int i, int j)
-{
-
-  int z = P.solution[i];
-  P.solution[i] = P.solution[j];
-  P.solution[j] = z;
-}
-
-void mutate(MP &children)
-{
-
-  int C = children[0].solution.size();
-  random_device rd;
-  mt19937 gen(rd());
-  uniform_int_distribution<> distr(0, C - 1);
-
-  for (int i = 0; i < 5; ++i)
-  {
-    swap(children[i], distr(gen), distr(gen));
-  }
 }
 
 void mutation(MP &children)
 {
   // add a mutation to the children with propability 0.01
 
-  random_device rd;
-  mt19937 gen(rd());
-  uniform_int_distribution<> distr(0, 9);
-  if (distr(gen) == distr(gen))
-    mutate(children);
+  if (rand() / RAND_MAX < 0.01)
+  {
+
+    int C = children[0].solution.size();
+    int j = rand() % C;
+    int k = rand() % C;
+
+    for (int i = 0; i < children.size(); ++i)
+      swap(children[i].solution[j], children[i].solution[k]);
+  }
+}
+
+void update_fitness(MP &parents)
+{
+  int n = parents.size();
+  double total_sum = 0;
+  for (const Parent &parent : parents)
+    total_sum += parent.penalization;
+
+  for (Parent &parent : parents)
+    parent.fitness = (double)(total_sum - parent.penalization) / (total_sum * (n - 1));
+}
+
+MP roulette_wheel_selection(const MP &parents)
+{
+  double rndNumber = rand() / (double)RAND_MAX;
+  double offset = 0.0;
+  VI picks;
+  picks.reserve(2);
+
+  while (picks.size() != 2)
+    for (int i = 0; i < parents.size(); i++)
+    {
+      offset += parents[i].fitness;
+      if (rndNumber < offset)
+      {
+        if (picks.size() == 0 or picks[0] != i)
+          picks.push_back(i);
+        else
+        {
+          int j = (i - 1 >= 0 ? i - 1 : i + 1);
+          picks.push_back(j);
+        }
+        break;
+      }
+    }
+
+  return {parents[picks[0]], parents[picks[1]]};
 }
 
 void genetic(const string &out, int C, const VI &ce, const VI &ne, const VC &classes, const VI &cleft)
 {
   double start = now();
-  MP parents = generate_parents(C, count_cleft(classes), ce, ne, classes);
-  Parent best_individual = find_best_individual(parents);
-  int termination_conditions = 10000;
 
+  MP parents = generate_parents(C, count_cleft(classes), ce, ne, classes);
+  int termination_conditions = 100000;
+
+  update_fitness(parents);
   sort_parents(parents);
+
+  Parent best_individual = parents[0];
 
   // termination conditions: we stop if in the last -termination_condition- generations
   // it hasn't been an improvement in the solution
@@ -424,32 +434,30 @@ void genetic(const string &out, int C, const VI &ce, const VI &ne, const VC &cla
   while (tc > 0 and (now() - start) < 60)
   {
 
-    Parent P1 = parents[0];
-    Parent P2 = parents[1];
+    MP selected_parents = roulette_wheel_selection(parents);
+    VI SP1 = selected_parents[0].solution;
+    VI SP2 = selected_parents[1].solution;
 
-    MP children = recombination(P1.solution, P2.solution, cleft, ce, ne, classes);
+    MP children = recombination(SP1, SP2, cleft, ce, ne, classes);
 
     mutation(children);
 
     for (int i = 0; i < 5; ++i)
       parents.push_back(children[i]);
 
+    update_fitness(parents);
     sort_parents(parents);
 
     for (int i = 0; i < 5; ++i)
       parents.pop_back();
 
-    Parent bi = find_best_individual(parents);
-
-    if (bi.fitness < best_individual.fitness)
-    {
-      best_individual = bi;
+    if (improved(best_individual, parents[0]))
       tc = termination_conditions;
-    }
     else
       --tc;
   }
-  write_solution(best_individual.solution, best_individual.fitness, now() - start, out);
+
+  write_solution(best_individual.solution, best_individual.penalization, now() - start, out);
 }
 
 void read_input(is &in, int &C, int &M, int &K, VI &ce, VI &ne, VC &classes)
