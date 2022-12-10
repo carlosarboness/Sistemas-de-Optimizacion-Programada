@@ -170,7 +170,7 @@ MP generate_parents(int C, const VI &cleft, const VI &ce, const VI &ne, const VC
   VI P = create_parent(C, cleft);
 
   // select the population size (it will remain constant during the iterations)
-  int psize = 20;
+  int psize = 400;
 
   MP parents(psize);
 
@@ -413,7 +413,7 @@ void genetic(const string &out, int C, const VI &ce, const VI &ne, const VC &cla
   double start = now();
   MP parents = generate_parents(C, count_cleft(classes), ce, ne, classes);
   Parent best_individual = find_best_individual(parents);
-  int termination_conditions = 1000000;
+  int termination_conditions = 10000;
 
   sort_parents(parents);
 
