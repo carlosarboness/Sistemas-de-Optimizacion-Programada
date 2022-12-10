@@ -365,7 +365,7 @@ void mutation(MP &children)
 {
   // add a mutation to the children with propability 0.01
 
-  if (rand() / RAND_MAX < 0.01)
+  if (rand() / (double)RAND_MAX < 0.01)
   {
 
     int C = children[0].solution.size();
@@ -390,12 +390,13 @@ void update_fitness(MP &parents)
 
 MP roulette_wheel_selection(const MP &parents)
 {
-  double rndNumber = rand() / (double)RAND_MAX;
   double offset = 0.0;
   VI picks;
   picks.reserve(2);
 
   while (picks.size() != 2)
+  {
+    double rndNumber = rand() / (double)RAND_MAX;
     for (int i = 0; i < parents.size(); i++)
     {
       offset += parents[i].fitness;
@@ -411,6 +412,8 @@ MP roulette_wheel_selection(const MP &parents)
         break;
       }
     }
+    offset = 0.0;
+  }
 
   return {parents[picks[0]], parents[picks[1]]};
 }
@@ -455,7 +458,7 @@ void genetic(const string &out, int C, const VI &ce, const VI &ne, const VC &cla
       tc = termination_conditions;
     else
       --tc;
-  }
+    }
 
   write_solution(best_individual.solution, best_individual.penalization, now() - start, out);
 }
