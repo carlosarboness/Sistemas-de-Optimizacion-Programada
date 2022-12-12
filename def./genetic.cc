@@ -172,7 +172,7 @@ MP generate_parents(int C, const VI &cleft, const VI &ce, const VI &ne, const VC
 
 bool improved(Parent &best_individual, const Parent &P)
 {
-  if (P.fitness > best_individual.fitness)
+  if (P.penalization < best_individual.penalization)
   {
     best_individual = P;
     return true;
@@ -388,7 +388,7 @@ void update_fitness(MP &parents)
     parent.fitness = (double)(total_sum - parent.penalization) / (total_sum * (n - 1));
 }
 
-Parent roulette_wheel_selection(const MP &parents)
+int roulette_wheel_selection(const MP &parents)
 {
   double rndNumber = rand() / (double)RAND_MAX;
   double offset = 0.0;
@@ -403,7 +403,7 @@ Parent roulette_wheel_selection(const MP &parents)
       break;
     }
   }
-  return parents[pick];
+  return pick;
 }
 
 void genetic(const string &out, int C, const VI &ce, const VI &ne, const VC &classes, const VI &cleft)
@@ -411,7 +411,7 @@ void genetic(const string &out, int C, const VI &ce, const VI &ne, const VC &cla
   double start = now();
 
   MP parents = generate_parents(C, count_cleft(classes), ce, ne, classes);
-  int termination_conditions = 100000;
+  int termination_conditions = 1000000;
 
   update_fitness(parents);
   sort_parents(parents);
@@ -424,14 +424,38 @@ void genetic(const string &out, int C, const VI &ce, const VI &ne, const VC &cla
 
   while (tc > 0 and (now() - start) < 60)
   {
-    cout << tc << endl;
-    Parent P1 = roulette_wheel_selection(parents);
-    Parent P2 = roulette_wheel_selection(parents);
+    int pick1 = roulette_wheel_selection(parents);
+    int pick2 = roulette_wheel_selection(parents);
 
-    VI SP1 = P1.solution;
-    VI SP2 = P2.solution;
+    if (pick2 == pick1)
+      pick2 = (pick2 - 1 >= 0 ? pick2 - 1 : pick2 + 1);
 
-    MP children = recombination(SP1, SP2, cleft, ce, ne, classes);
+    Parent P1 = parents[pick1];
+    Parent P2 = parents[pick2];
+
+    MP children = recombination(P1.solution, P2.solution, cleft, ce, ne, classes);
+
+    /*
+    for (auto &d : P1.solution)
+      cout << d << " ";
+    cout << "pen: " << P1.penalization;
+    cout << endl;
+    for (auto &d : P2.solution)
+      cout << d << " ";
+    cout << "pen: " << P2.penalization;
+    cout << endl;
+
+    cout << "-------------------" << endl;
+
+    for (auto &m : children)
+    {
+      for (auto &d : m.solution)
+        cout << d << " ";
+      cout << "pen: " << m.penalization << endl;
+      cout << endl;
+    }
+    cout << endl;
+    */
 
     mutation(children);
 
