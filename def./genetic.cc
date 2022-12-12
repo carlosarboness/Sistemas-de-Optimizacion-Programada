@@ -182,7 +182,7 @@ bool improved(Parent &best_individual, const Parent &P)
 
 bool best_fit(const Parent &P1, const Parent &P2)
 {
-  return P1.fitness > P2.fitness;
+  return P1.penalization < P2.penalization;
 }
 
 void sort_parents(MP &parents)
@@ -388,34 +388,22 @@ void update_fitness(MP &parents)
     parent.fitness = (double)(total_sum - parent.penalization) / (total_sum * (n - 1));
 }
 
-MP roulette_wheel_selection(const MP &parents)
+Parent roulette_wheel_selection(const MP &parents)
 {
+  double rndNumber = rand() / (double)RAND_MAX;
   double offset = 0.0;
-  VI picks;
-  picks.reserve(2);
+  int pick = 0;
 
-  while (picks.size() != 2)
+  for (int i = 0; i < parents.size(); i++)
   {
-    double rndNumber = rand() / (double)RAND_MAX;
-    for (int i = 0; i < parents.size(); i++)
+    offset += parents[i].fitness;
+    if (rndNumber < offset)
     {
-      offset += parents[i].fitness;
-      if (rndNumber < offset)
-      {
-        if (picks.size() == 0 or picks[0] != i)
-          picks.push_back(i);
-        else
-        {
-          int j = (i - 1 >= 0 ? i - 1 : i + 1);
-          picks.push_back(j);
-        }
-        break;
-      }
+      pick = i;
+      break;
     }
-    offset = 0.0;
   }
-
-  return {parents[picks[0]], parents[picks[1]]};
+  return parents[pick];
 }
 
 void genetic(const string &out, int C, const VI &ce, const VI &ne, const VC &classes, const VI &cleft)
@@ -436,10 +424,12 @@ void genetic(const string &out, int C, const VI &ce, const VI &ne, const VC &cla
 
   while (tc > 0 and (now() - start) < 60)
   {
+    cout << tc << endl;
+    Parent P1 = roulette_wheel_selection(parents);
+    Parent P2 = roulette_wheel_selection(parents);
 
-    MP selected_parents = roulette_wheel_selection(parents);
-    VI SP1 = selected_parents[0].solution;
-    VI SP2 = selected_parents[1].solution;
+    VI SP1 = P1.solution;
+    VI SP2 = P2.solution;
 
     MP children = recombination(SP1, SP2, cleft, ce, ne, classes);
 
@@ -448,17 +438,18 @@ void genetic(const string &out, int C, const VI &ce, const VI &ne, const VC &cla
     for (int i = 0; i < 5; ++i)
       parents.push_back(children[i]);
 
-    update_fitness(parents);
     sort_parents(parents);
 
     for (int i = 0; i < 5; ++i)
       parents.pop_back();
 
+    update_fitness(parents);
+
     if (improved(best_individual, parents[0]))
       tc = termination_conditions;
     else
       --tc;
-    }
+  }
 
   write_solution(best_individual.solution, best_individual.penalization, now() - start, out);
 }
