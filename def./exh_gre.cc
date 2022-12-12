@@ -6,10 +6,9 @@
 #include <fstream>
 using namespace std;
 
-struct Class;
 struct Station;
 using VI = vector<int>;
-using VC = vector<Class>;
+using MI = vector<VI>;
 using VS = vector<Station>;
 using VD = vector<double>;
 using MD = vector<VD>;
@@ -18,18 +17,17 @@ using os = ofstream;
 
 int UNDEF = -1;
 
+struct Window
+{
+    VI ce, ne; // Stores the ce (ne) of a particular station in the position of the vector
+};
+
 // Stores all the information given by the input
 struct Data
 {
-    int C, M, K; // Number of cars, improvments and classes respectively
-    VI ce, ne;   // Stores the ce (ne) of a particular station in the position of the vector
-    VC classes;  // Stores each class in the position of the vector
-};
-
-struct Class
-{
-    int ncars;       // Numbers of cars of a particular class that needs to be produces
-    VI improvements; // Vector of integers (1/0) that indicate if the class requires i-th improvment
+    int C, M, K;     // Number of cars, improvements and classes respectively
+    Window w;        // Stores the windows informations
+    MI improvements; // Matrix of integers (1/0) that indicate if the i-th class requires j-th improvment
 };
 
 // Stores the number of needed requirements in a particular
@@ -117,24 +115,26 @@ int update_station(int bit, Station &st, int ce, int ne, bool end)
 /* Update Production Lines: updates the production lines of all the stations because of the
 addition of a new car in the production line.
 The function returns the total sum of penalizations of each line, updated with the new car */
-int UPL(const VI &improvements, VS &stations, const VI &ce, const VI &ne, bool end)
+int UPL(const VI &imp, VS &stations, const Window &w, bool end)
 {
+    const auto &[ce, ne] = w;
+
     int M = stations.size();
     int total_penalitzations = 0;
     for (int i = 0; i < M; ++i)
-        total_penalitzations += update_station(improvements[i], stations[i], ce[i], ne[i], end);
+        total_penalitzations += update_station(imp[i], stations[i], ce[i], ne[i], end);
     return total_penalitzations;
 }
 
-int calculate_ones(int j, const VI &cleft, const VC &classes)
+int calculate_ones(int j, const VI &cleft, const MI &improvements)
 {
     int ones = 0;
     for (int i = 0; i < cleft.size(); ++i)
-        ones += cleft[i] * classes[i].improvements[j];
+        ones += cleft[i] * improvements[i][j];
     return ones;
 }
 
-int _cs(const VI &line, int ce, int ne)
+int _cs(const VI &line, int ce_i, int ne_i)
 {
 
     int total_penalizations, requirements;
@@ -142,10 +142,10 @@ int _cs(const VI &line, int ce, int ne)
 
     // count inicial windows
     int uw = 0;
-    for (int i = ne; i > 0; --i)
+    for (int i = ne_i; i > 0; --i)
     {
         requirements += line[uw];
-        total_penalizations += max(requirements - ce, 0);
+        total_penalizations += max(requirements - ce_i, 0);
         ++uw;
     }
 
@@ -153,22 +153,22 @@ int _cs(const VI &line, int ce, int ne)
     for (; uw < line.size(); ++uw)
     {
         requirements += line[uw];
-        requirements -= line[uw - ne];
-        total_penalizations += max(requirements - ce, 0);
+        requirements -= line[uw - ne_i];
+        total_penalizations += max(requirements - ce_i, 0);
     }
 
     // count end windows
     while (requirements > 0)
     {
-        requirements -= line[uw - ne];
-        total_penalizations += max(requirements - ce, 0);
+        requirements -= line[uw - ne_i];
+        total_penalizations += max(requirements - ce_i, 0);
         ++uw;
     }
 
     return total_penalizations;
 }
 
-bool add_one(const VI &line, int ones, int zeros, int &req, int ce)
+bool add_one(const VI &line, int ones, int zeros, int &req, int ce_i)
 {
     if (ones <= 0)
         return false;
@@ -176,7 +176,7 @@ bool add_one(const VI &line, int ones, int zeros, int &req, int ce)
     if (zeros <= 0)
         return true;
 
-    if (req + 1 <= ce)
+    if (req + 1 <= ce_i)
     {
         req += 1;
         return true;
@@ -190,45 +190,49 @@ void add_bit(VI &line, int bit, int &zeros, int &ones)
     (bit ? --ones : --zeros);
 }
 
-int lb_station(int j, int i, const VI &cs, const VI &cleft, VI line, int ce, int ne, const VC &classes)
+int lb_station(int j, int i, const VI &cs, const VI &cleft, VI line, int ce_i, int ne_i, const MI &improvements)
 {
     int C = cs.size();
-    int ones = calculate_ones(j, cleft, classes);
+    int ones = calculate_ones(j, cleft, improvements);
     int zeros = (C - i - 1) - ones;
 
     int req = 0;
 
-    for (int k = i; k >= 0 and k > i - ne; --k)
+    for (int k = i; k >= 0 and k > i - ne_i; --k)
         if (line[k])
             ++req;
 
     for (; zeros > 0 or ones > 0; ++i)
     {
-        if (int lw = i - ne + 1; lw >= 0)
+        if (int lw = i - ne_i + 1; lw >= 0)
             req -= line[lw];
 
-        (add_one(line, ones, zeros, req, ce) ? add_bit(line, 1, zeros, ones) : add_bit(line, 0, zeros, ones));
+        (add_one(line, ones, zeros, req, ce_i) ? add_bit(line, 1, zeros, ones) : add_bit(line, 0, zeros, ones));
     }
 
-    return _cs(line, ce, ne);
+    return _cs(line, ce_i, ne_i);
 }
 
 /* Returns a lower bound of the current solution cs.
-This lower bound is the sum of the minimum penalization of each station if the improvments were in the best possible way */
-int lower_bound(int i, int LowerBound, const VI &cs, const VI &cleft, const VS &st, const VI &ce, const VI &ne, const VC &cl)
+This lower bound is the sum of the minimum penalization of each station if the improvements were distributed in the best possible way */
+int lower_bound(int i, int LowerBound, const VI &cs, const VI &cleft, const VS &st, const Window &w, const MI &improvements)
 {
+    const auto &[ce, ne] = w;
+
     if (i == -1)
         return 0;
     for (int j = 0; j < ne.size(); ++j)
-        LowerBound += lb_station(j, i, cs, cleft, st[j].line, ce[j], ne[j], cl);
+        LowerBound += lb_station(j, i, cs, cleft, st[j].line, ce[j], ne[j], improvements);
 
     return LowerBound;
 }
 
-VI update(VI generator, int K)
+/* Updates de elements of the vector generator in order to
+optimize the order in wich the exhaustive search is done*/
+VI update_generator(VI generator)
 {
     // random_shuffle(generator.begin(), generator.end());
-
+    int K = generator.size();
     for (int i = 0; i < K; ++i)
         generator[i] = (generator[i] + 1) % K;
 
@@ -239,7 +243,7 @@ VI update(VI generator, int K)
 void exhaustive_search_rec(int i, int cp, int &mp, VI &cs, VI &cleft, VS &stations, const Data &data,
                            const double &start, const string &out, const VI &generator)
 {
-    const auto &[C, M, K, ce, ne, classes] = data;
+    const auto &[C, M, K, w, improvements] = data;
 
     if (now() - start < 60)
     {
@@ -248,7 +252,7 @@ void exhaustive_search_rec(int i, int cp, int &mp, VI &cs, VI &cleft, VS &statio
             mp = cp;
             write_solution(cs, cp, now() - start, out);
         }
-        if (lower_bound(i - 1, cp, cs, cleft, stations, ce, ne, classes) < mp)
+        if (lower_bound(i - 1, cp, cs, cleft, stations, w, improvements) < mp)
         {
             for (int cl : generator)
             {
@@ -257,10 +261,10 @@ void exhaustive_search_rec(int i, int cp, int &mp, VI &cs, VI &cleft, VS &statio
                     --cleft[cl];
                     cs[i] = cl;
 
-                    if (int up = UPL(classes[cl].improvements, stations, ce, ne, i + 1 == C); up + cp < mp)
-                        exhaustive_search_rec(i + 1, cp + up, mp, cs, cleft, stations, data, start, out, update(generator, K));
+                    if (int up = UPL(improvements[cl], stations, w, i + 1 == C); up + cp < mp)
+                        exhaustive_search_rec(i + 1, cp + up, mp, cs, cleft, stations, data, start, out, update_generator(generator));
 
-                    restore(stations, ne);
+                    restore(stations, w.ne);
                     ++cleft[cl];
                 }
             }
@@ -284,17 +288,6 @@ VS inicialize_stations(int C, int M)
     return stations;
 }
 
-/* Returns a vector containing for each index the number of cars
-that are left to be produced for that class */
-VI count_cleft(const VC &classes)
-{
-    int K = classes.size();
-    VI cleft(K);
-    for (int i = 0; i < K; ++i)
-        cleft[i] = classes[i].ncars;
-    return cleft;
-}
-
 //////// Required functions of the greedy algorithm
 // returns the argmax of VI
 int most_cleft_index(const VI &cleft)
@@ -315,8 +308,10 @@ int best_fit(VI &cleft, const VD &costs)
     return bf.id_car;
 }
 
-double calculate_cost(const VI &ce, const VI &ne, const VI &imp_i, const VI &imp_j)
+double calculate_cost(const Window w, const VI &imp_i, const VI &imp_j)
 {
+    const auto &[ce, ne] = w;
+
     double cost = 0;
 
     for (int k = 0; k < ce.size(); ++k)
@@ -328,22 +323,22 @@ double calculate_cost(const VI &ce, const VI &ne, const VI &imp_i, const VI &imp
 
 MD generate_costs_matrix(const Data &data)
 {
-    const auto &[C, M, K, ce, ne, classes] = data;
+    const auto &[C, M, K, w, improvements] = data;
 
     MD costs(K, VD(K));
     for (int i = 0; i < K; ++i)
         for (int j = i; j < K; ++j)
         {
-            double c = calculate_cost(ce, ne, classes[i].improvements, classes[j].improvements);
+            double c = calculate_cost(w, improvements[i], improvements[j]);
             costs[i][j] = costs[j][i] = c;
         }
     return costs;
 }
 
-VI gen_sol(const Data &data)
+VI gen_sol(const Data &data, VI cleft)
 {
-    const auto &[C, M, K, ce, ne, classes] = data;
-    VI cleft = count_cleft(classes);
+    const auto &[C, M, K, w, improvements] = data;
+
     MD costs = generate_costs_matrix(data);
     // Calculate solution
     VI sol(C);
@@ -357,18 +352,18 @@ VI gen_sol(const Data &data)
 }
 
 /* Updates each individual line and retuns the penalitzations of it */
-int add_car(int bit, Station &st, int ce, int ne, bool end)
+int add_car(int bit, Station &st, int ce_i, int ne_i, bool end)
 {
 
     // update the window
-    int uw = st.line.size() - ne;
+    int uw = st.line.size() - ne_i;
     if (uw >= 0)
         st.requirements -= st.line[uw];
 
     st.line.push_back(bit);
     st.requirements += bit;
 
-    int penalitzation = max(st.requirements - ce, 0);
+    int penalitzation = max(st.requirements - ce_i, 0);
     // we add to the penalitzarions the final windows
     if (end)
     {
@@ -376,14 +371,16 @@ int add_car(int bit, Station &st, int ce, int ne, bool end)
         for (; st.requirements > 0; ++uw)
         {
             st.requirements -= st.line[uw];
-            penalitzation += max(st.requirements - ce, 0);
+            penalitzation += max(st.requirements - ce_i, 0);
         }
     }
     return penalitzation;
 }
 
-int update_station_cs(const VI &imp, VS &stations, const VI &ce, const VI &ne, bool end)
+int update_station_cs(const VI &imp, VS &stations, const Window &w, bool end)
 {
+    const auto &[ce, ne] = w;
+
     int M = ce.size();
     int total_penalization = 0;
     for (int i = 0; i < M; ++i)
@@ -393,18 +390,19 @@ int update_station_cs(const VI &imp, VS &stations, const VI &ce, const VI &ne, b
 
 int count_penalization_cs(const VI &sol, const Data &data)
 {
-    const auto &[C, M, K, ce, ne, classes] = data;
+    const auto &[C, M, K, w, improvements] = data;
 
     VS stations = inicialize_stations(C, M);
 
     int total_penalization = 0;
     for (int i = 0; i < C; ++i)
-        total_penalization += update_station_cs(classes[sol[i]].improvements, stations, ce, ne, i == C - 1);
+        total_penalization += update_station_cs(improvements[sol[i]], stations, w, i == C - 1);
     return total_penalization;
 }
 ////////
 
-/* Returns the initial generator */
+/* Returns the initial generator which is the order
+in which the exhaustive search will be done*/
 VI create_generator(int K)
 {
     VI generator(K);
@@ -414,32 +412,33 @@ VI create_generator(int K)
 }
 
 /* Given a data and the output file name writes in the output file the solution of the exhaustive search */
-void exhaustive_search(const Data &data, const string &out)
+void exhaustive_search(const Data &data, VI &cleft, const string &out)
 {
-    const auto &[C, M, K, ce, ne, classes] = data;
+    const auto &[C, M, K, w, improvements] = data;
 
-    VI cleft = count_cleft(classes); // Stores the number of cars left of the i-th class that still need to be produced
     VS stations = inicialize_stations(C, M);
     VI generator = create_generator(K); // Vector that inticates the order to do the exhausitve search
 
     double start = now(); // inicialize the counter
 
     // The first solution is the one using the greedy algorithm
-    VI cs = gen_sol(data);                    // current solution
+    VI cs = gen_sol(data, cleft);             // current solution
     int mp = count_penalization_cs(cs, data); // minimum penalization
     write_solution(cs, mp, now() - start, out);
 
     exhaustive_search_rec(0, 0, mp, cs, cleft, stations, data, start, out, generator);
 }
 
-void read_input(is &in, Data &data)
+void read_input(is &in, Data &data, VI &cleft)
 {
-    auto &[C, M, K, ce, ne, classes] = data;
+    auto &[C, M, K, w, improvements] = data;
+    auto &[ce, ne] = w;
     in >> C >> M >> K;
 
     ce.resize(M);
     ne.resize(M);
-    classes.resize(K);
+    cleft.resize(K);
+    improvements.resize(K, VI(M));
 
     for (auto &capacity : ce)
         in >> capacity;
@@ -448,12 +447,10 @@ void read_input(is &in, Data &data)
 
     for (int i = 0; i < K; ++i)
     {
-        int aux; // ns com es pot fer per no llegir algo
-        in >> aux >> classes[i].ncars;
-        VI improvements(M);
-        for (auto &bit : improvements)
-            in >> bit;
-        classes[i].improvements = improvements;
+        int aux;
+        in >> aux >> cleft[i];
+        for (int j = 0; j < M; ++j)
+            in >> improvements[i][j];
     }
 }
 
@@ -467,8 +464,8 @@ int main(int argc, char *argv[])
 
     ifstream in(argv[1]);
     Data data;
+    VI cleft; // Stores the number of cars left of the i-th class that still need to be produced
+    read_input(in, data, cleft);
 
-    read_input(in, data);
-
-    exhaustive_search(data, argv[2]);
+    exhaustive_search(data, cleft, argv[2]);
 }
