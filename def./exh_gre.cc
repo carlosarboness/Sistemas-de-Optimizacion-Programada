@@ -37,11 +37,13 @@ struct Station
     VI line;          // stores the requirements in order that need to be satisfied by the station in a particular moment
 };
 
+//////// Required struct of the greedy algorithm
 struct fit
 {
     int id_car = UNDEF, cl = UNDEF;
     double cost = UNDEF;
 };
+////////
 
 double now()
 {
