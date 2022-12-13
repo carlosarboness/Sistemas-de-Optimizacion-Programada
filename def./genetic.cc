@@ -10,31 +10,32 @@ using namespace std;
 
 struct Class;
 struct Station;
-struct Parent;
+struct Individual;
 
 using VI = vector<int>;
-using VC = vector<Class>;
-using VS = vector<Station>;
-using MI = vector<VI>;
-using MP = vector<Parent>;
+using MVI = vector<VI>;
+using MI = vector<Individual>;
 using is = ifstream;
 using os = ofstream;
 
 int UNDEF = -1;
+double UNDEFINED = -1;
 
-struct Class
+struct Window
 {
-  int id, ncars;
-  VI improvements;
+  VI ce, ne;
 };
 
-struct Station
+// Stores all the information given by the input
+struct Data
 {
-  int requirements;
-  VI line;
+  int C, M, K;
+  Window w;
+  MVI improvements;
+  VI cleft; // vector with the total cars of each class (cars left)
 };
 
-struct Parent
+struct Individual
 {
   VI solution;
   int penalization;
@@ -67,16 +68,6 @@ void write_solution(const VI &cs, int cp, const double &elapsed_time, const stri
   f << endl;
 
   f.close();
-}
-
-/* Returns a vector containing for each index the number of cars that are left for that class */
-VI count_cleft(const VC &classes)
-{
-  int K = classes.size();
-  VI cleft(K);
-  for (int i = 0; i < K; ++i)
-    cleft[i] = classes[i].ncars;
-  return cleft;
 }
 
 int count_penalization(const VI &line, int ce, int ne)
@@ -113,25 +104,24 @@ int count_penalization(const VI &line, int ce, int ne)
   return total_penalizations;
 }
 
-MI createSM(const VI &P, int C, int M, const VC &classes)
+MVI createSM(const VI &P, int C, int M, const MVI &improvements)
 {
 
-  MI SM(M, VI(C));
+  MVI SM(M, VI(C));
   for (int i = 0; i < C; ++i)
     for (int j = 0; j < M; ++j)
-      SM[j][i] = classes[P[i]].improvements[j];
+      SM[j][i] = improvements[P[i]][j];
   return SM;
 }
 
-int penalization(const VI &P, const VI &ce, const VI &ne, const VC &classes)
+int penalization(const VI &P, const Data &data)
 {
-  int C = P.size();
-  int M = ce.size();
-  MI stations_matrix = createSM(P, C, M, classes);
+
+  MVI stations_matrix = createSM(P, data.C, data.M, data.improvements);
   int total_pen = 0;
 
-  for (int i = 0; i < M; ++i)
-    total_pen += count_penalization(stations_matrix[i], ce[i], ne[i]);
+  for (int i = 0; i < data.M; ++i)
+    total_pen += count_penalization(stations_matrix[i], data.w.ce[i], data.w.ne[i]);
   return total_pen;
 }
 
@@ -140,37 +130,20 @@ void generate_permutation(VI &parent)
   random_shuffle(parent.begin(), parent.end());
 }
 
-VI create_parent(int C, const VI &cleft)
+VI create_generator_individual(int C, const VI &cleft)
 {
-  VI parent;
-  parent.reserve(C);
+  VI individual;
+  individual.reserve(C);
   for (int i = 0; i < cleft.size(); ++i)
   {
     int cl = cleft[i];
     for (; cl > 0; --cl)
-      parent.push_back(i);
+      individual.push_back(i);
   }
-  return parent;
+  return individual;
 }
 
-MP generate_parents(int C, const VI &cleft, const VI &ce, const VI &ne, const VC &classes)
-{
-  VI P = create_parent(C, cleft);
-
-  // select the population size (it will remain constant during the iterations)
-  int psize = 600;
-
-  MP parents(psize);
-
-  for (int i = 0; i < psize; ++i)
-  {
-    generate_permutation(P);
-    parents[i] = Parent{P, penalization(P, ce, ne, classes), 0};
-  }
-  return parents;
-}
-
-bool improved(Parent &best_individual, const Parent &P)
+bool improved(Individual &best_individual, const Individual &P)
 {
   if (P.penalization < best_individual.penalization)
   {
@@ -180,14 +153,14 @@ bool improved(Parent &best_individual, const Parent &P)
   return false;
 }
 
-bool best_fit(const Parent &P1, const Parent &P2)
+bool best_fit(const Individual &P1, const Individual &P2)
 {
   return P1.penalization < P2.penalization;
 }
 
-void sort_parents(MP &parents)
+void sort_population(MI &population)
 {
-  sort(parents.begin(), parents.end(), best_fit);
+  sort(population.begin(), population.end(), best_fit);
 }
 
 VI generate_random_cut_points(int C)
@@ -301,7 +274,7 @@ VI uniform(const VI &P1, const VI &P2, VI cleft)
   return child;
 }
 
-MI recombinate(const VI &P1, const VI &P2, int left, int right, const VI &cleft)
+MVI recombinate(const VI &P1, const VI &P2, int left, int right, const VI &cleft)
 {
   int C = P1.size();
 
@@ -346,26 +319,28 @@ MI recombinate(const VI &P1, const VI &P2, int left, int right, const VI &cleft)
   return {children1, children2, children3, children4, children5};
 }
 
-MP recombination(const VI &P1, const VI &P2, const VI &cleft, const VI &ce, const VI &ne, const VC &classes)
+MI recombination(const VI &P1, const VI &P2, const Data &data)
 {
-  int C = P1.size();
+  int numChildren = 5;
 
-  VI cuts = generate_random_cut_points(C);
-  MI recombination = recombinate(P1, P2, cuts[0], cuts[1], cleft);
-  MP children;
-  children.reserve(5);
+  VI cuts = generate_random_cut_points(data.C);
+  MVI recombination = recombinate(P1, P2, cuts[0], cuts[1], data.cleft);
+  MI children;
+  children.reserve(numChildren);
 
-  for (int i = 0; i < 5; ++i)
-    children.push_back(Parent{recombination[i], penalization(recombination[i], ce, ne, classes), 0});
+  for (int i = 0; i < numChildren; ++i)
+    children.push_back(Individual{recombination[i], penalization(recombination[i], data), UNDEFINED});
 
   return children;
 }
 
-void mutation(MP &children)
+/* Adds a mutation to the children. A mutation is a permutation of two elements of each children */
+void mutation(MI &children, const Data &data)
 {
-  // add a mutation to the children with propability 0.01
+  double rndNumber = rand() / (double)RAND_MAX; // random number in range [0, 1)
 
-  if (rand() / (double)RAND_MAX < 0.01)
+  // add a mutation to the children with propability 0.01
+  if (rndNumber < 0.01)
   {
 
     int C = children[0].solution.size();
@@ -373,26 +348,40 @@ void mutation(MP &children)
     int k = rand() % C;
 
     for (int i = 0; i < children.size(); ++i)
+    {
       swap(children[i].solution[j], children[i].solution[k]);
+      children[i].penalization = penalization(children[i].solution, data);
+    }
   }
 }
 
-void update_fitness(MP &parents)
+// updates the fitness of every parent
+void update_fitness(MI &population, const int &psum)
 {
-  int n = parents.size();
-  double total_sum = 0;
-  for (const Parent &parent : parents)
-    total_sum += parent.penalization;
+  int n = population.size();
 
-  for (Parent &parent : parents)
-    parent.fitness = (double)(total_sum - parent.penalization) / (total_sum * (n - 1));
+  for (Individual &individual : population)
+    individual.fitness = (double)(psum - individual.penalization) / (psum * (n - 1));
 }
 
-int roulette_wheel_selection(const MP &parents)
+/* Returns a the index of the parent chosen by the roulette wheel selection method.
+Parents with higher fitness have more probability to be chosen */
+int roulette_wheel_selection(const MI &parents)
 {
-  double rndNumber = rand() / (double)RAND_MAX;
-  double offset = 0.0;
-  int pick = 0;
+  /*
+                       | random number
+                       |
+                       X
+    +--------------+-----+----+--+--++---+-----+
+    |              |     |    |  |  ||   |     |
+    +--------------+-----+----+--+--++---+-----+
+   0.0            p0   p0+p1                  1.0 == sum(p[i])
+
+  */
+
+  double rndNumber = rand() / (double)RAND_MAX; // random number in range [0, 1)
+  double offset = 0.0;                          // acumulated probability
+  int pick = 0;                                 // roulette winner
 
   for (int i = 0; i < parents.size(); i++)
   {
@@ -406,98 +395,138 @@ int roulette_wheel_selection(const MP &parents)
   return pick;
 }
 
-void genetic(const string &out, int C, const VI &ce, const VI &ne, const VC &classes, const VI &cleft)
+void update_population(MI &parents, const MI &children, int &psum, const bool &add)
 {
-  double start = now();
+  int numChildren = 5;
 
-  MP parents = generate_parents(C, count_cleft(classes), ce, ne, classes);
-  int termination_conditions = 1000000;
+  if (add)
+  {
+    for (int i = 0; i < numChildren; ++i)
+    {
+      parents.push_back(children[i]);
+      psum += children[i].penalization;
+    }
+  }
+  else
+  {
+    for (int i = 0; i < numChildren; ++i)
+    {
+      psum -= parents.back().penalization;
+      parents.pop_back();
+    }
+  }
+}
 
-  update_fitness(parents);
-  sort_parents(parents);
+MI generate_inicial_population(const Data &data, int &psum)
+{
+  VI Generator = create_generator_individual(data.C, data.cleft);
 
-  Parent best_individual = parents[0];
+  // select the population size (it will remain constant during the iterations)
+  int psize = 1000;
+
+  MI inicial_population(psize);
+
+  for (int i = 0; i < psize; ++i)
+  {
+    generate_permutation(Generator);
+    inicial_population[i] = Individual{Generator, penalization(Generator, data), UNDEFINED};
+    psum += inicial_population[i].penalization;
+  }
+
+  return inicial_population;
+}
+
+int check(const int &pick1, const int &pick2)
+{
+  if (pick1 != pick2)
+    return pick2;
+  return (pick2 - 1 >= 0 ? pick2 - 1 : pick2 + 1);
+}
+
+void genetic(const string &out, const Data &data)
+{
+  double start = now(); // inicialize the counter
+
+  int individual_with_less_penalization = 0;
+  int psum = UNDEF;                                        // total sum of penalization of the enitre population
+  MI population = generate_inicial_population(data, psum); // random generated vector of parents (inicial population)
+  int numChildren = 5;                                     // number of children generated from each 2 parents
+
+  update_fitness(population, psum);
+  sort_population(population);
+
+  Individual best_individual = population[individual_with_less_penalization];
 
   // termination conditions: we stop if in the last -termination_condition- generations
-  // it hasn't been an improvement in the solution
+  // it hasn't been an iMIrovement in the solution
+  int termination_conditions = 100000;
   int tc = termination_conditions;
 
+  // do genetic algorithm while termination conditions aren't accoMIlished or until the
+  // time has expired
   while (tc > 0 and (now() - start) < 60)
   {
-    int pick1 = roulette_wheel_selection(parents);
-    int pick2 = roulette_wheel_selection(parents);
 
-    if (pick2 == pick1)
-      pick2 = (pick2 - 1 >= 0 ? pick2 - 1 : pick2 + 1);
+    int pick1 = roulette_wheel_selection(population);
+    int pick2 = roulette_wheel_selection(population);
 
-    Parent P1 = parents[pick1];
-    Parent P2 = parents[pick2];
+    // selection of the two parents to execute the recombination
+    Individual Parent1 = population[pick1];
+    Individual Parent2 = population[check(pick1, pick2)]; // we want to make sure to select differt parents
 
-    MP children = recombination(P1.solution, P2.solution, cleft, ce, ne, classes);
+    // -numChildren- children are generated by recombination from the previous parents
+    MI children = recombination(Parent1.solution, Parent2.solution, data);
 
-    /*
-    for (auto &d : P1.solution)
-      cout << d << " ";
-    cout << "pen: " << P1.penalization;
-    cout << endl;
-    for (auto &d : P2.solution)
-      cout << d << " ";
-    cout << "pen: " << P2.penalization;
-    cout << endl;
+    // in some cases, a mutation appears in the children in order to allow the appereance of new traits
+    mutation(children, data);
 
-    cout << "-------------------" << endl;
+    // the children are introduced into the population
+    update_population(population, children, psum, true);
 
-    for (auto &m : children)
+    // the full population is sorted by fitness, best individuals appear fisrt
+    sort_population(population);
+
+    // the worst -NumChildren- individuals are expelled of the population
+    update_population(population, {}, psum, false);
+
+    // the fitness of each individual is updated
+    update_fitness(population, psum);
+
+    // if the best individual in our current population is better than the best individual ever found,
+    // we update this last and restart the termination conditions. On the other hand, if there hasn't been
+    // an improvement in this generation we decrease the termination conditions
+    if (improved(best_individual, population[individual_with_less_penalization]))
     {
-      for (auto &d : m.solution)
-        cout << d << " ";
-      cout << "pen: " << m.penalization << endl;
-      cout << endl;
+      write_solution(best_individual.solution, best_individual.penalization, now() - start, out);
+      tc = termination_conditions; // restart the termination conditions
     }
-    cout << endl;
-    */
-
-    mutation(children);
-
-    for (int i = 0; i < 5; ++i)
-      parents.push_back(children[i]);
-
-    sort_parents(parents);
-
-    for (int i = 0; i < 5; ++i)
-      parents.pop_back();
-
-    update_fitness(parents);
-
-    if (improved(best_individual, parents[0]))
-      tc = termination_conditions;
     else
       --tc;
   }
-
-  write_solution(best_individual.solution, best_individual.penalization, now() - start, out);
 }
 
-void read_input(is &in, int &C, int &M, int &K, VI &ce, VI &ne, VC &classes)
+void read_input(is &in, Data &data)
 {
+  auto &[C, M, K, w, improvements, cleft] = data;
+  auto &[ce, ne] = w;
   in >> C >> M >> K;
 
   ce.resize(M);
   ne.resize(M);
-  classes.resize(K);
+  cleft.resize(K);
+  improvements.resize(K, VI(M));
 
   for (auto &capacity : ce)
     in >> capacity;
   for (auto &window : ne)
     in >> window;
 
+  int aux;
   for (int i = 0; i < K; ++i)
   {
-    in >> classes[i].id >> classes[i].ncars;
-    VI improvements(M);
-    for (auto &bit : improvements)
-      in >> bit;
-    classes[i].improvements = improvements;
+    in >> aux >> cleft[i];
+    for (int j = 0; j < M; ++j)
+      in >> improvements[i][j];
   }
 }
 
@@ -512,11 +541,8 @@ int main(int argc, char *argv[])
 
   ifstream in(argv[1]);
 
-  int C, M, K;
-  VI ce, ne;
-  VC classes;
+  Data data;
+  read_input(in, data);
 
-  read_input(in, C, M, K, ce, ne, classes);
-
-  genetic(argv[2], C, ce, ne, classes, count_cleft(classes));
+  genetic(argv[2], data);
 }
