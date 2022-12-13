@@ -126,6 +126,7 @@ int UPL(const VI &imp, VS &stations, const Window &w, bool end)
     return total_penalitzations;
 }
 
+/* Returns the improvements that are still needed in the station of the column j of improvements*/
 int calculate_ones(int j, const VI &cleft, const MI &improvements)
 {
     int ones = 0;
@@ -134,7 +135,8 @@ int calculate_ones(int j, const VI &cleft, const MI &improvements)
     return ones;
 }
 
-int _cs(const VI &line, int ce_i, int ne_i)
+/* Returns the penalization of the station line given a window with ne_i and ce_i */
+int pen_cs(const VI &line, int ce_i, int ne_i)
 {
 
     int total_penalizations, requirements;
@@ -168,6 +170,7 @@ int _cs(const VI &line, int ce_i, int ne_i)
     return total_penalizations;
 }
 
+/* Returs if a one (improvement required) can be laced to the line of the sataion */
 bool add_one(const VI &line, int ones, int zeros, int &req, int ce_i)
 {
     if (ones <= 0)
@@ -176,6 +179,7 @@ bool add_one(const VI &line, int ones, int zeros, int &req, int ce_i)
     if (zeros <= 0)
         return true;
 
+    // A one can be added if we added it would not cost a penalization
     if (req + 1 <= ce_i)
     {
         req += 1;
@@ -184,24 +188,32 @@ bool add_one(const VI &line, int ones, int zeros, int &req, int ce_i)
     return false;
 }
 
+/* Laces in the line the required bit and updates number of bits left (ones/zeros) of the bit laced
+Prec: there must be bits left (zeros/ones) of the bit that has to be added */
 void add_bit(VI &line, int bit, int &zeros, int &ones)
 {
     line.push_back(bit);
     (bit ? --ones : --zeros);
 }
 
+/* Calculates the lower bownd for a particular station.
+The lower bound consist in counting how many improvements are needed in that station
+and distribute them in the best possible way such as the penalization is minimum */
 int lb_station(int j, int i, const VI &cs, const VI &cleft, VI line, int ce_i, int ne_i, const MI &improvements)
 {
     int C = cs.size();
     int ones = calculate_ones(j, cleft, improvements);
     int zeros = (C - i - 1) - ones;
 
+    // Counts how many requirements of improvements are needed in the last window
     int req = 0;
-
     for (int k = i; k >= 0 and k > i - ne_i; --k)
         if (line[k])
             ++req;
 
+    // Distributes the improvements so that the penalization is minimum
+    // To do that, while there is zero bits and one bits left in each window of size ne_i, ce_i ones and ne - ce
+    // zeros are laced. Then all the ones (or zeros) that are left are laced.
     for (; zeros > 0 or ones > 0; ++i)
     {
         if (int lw = i - ne_i + 1; lw >= 0)
@@ -210,17 +222,19 @@ int lb_station(int j, int i, const VI &cs, const VI &cleft, VI line, int ce_i, i
         (add_one(line, ones, zeros, req, ce_i) ? add_bit(line, 1, zeros, ones) : add_bit(line, 0, zeros, ones));
     }
 
-    return _cs(line, ce_i, ne_i);
+    // Returns the penalization of the line created which is the smaller one given the cs.
+    return pen_cs(line, ce_i, ne_i);
 }
 
 /* Returns a lower bound of the current solution cs.
 This lower bound is the sum of the minimum penalization of each station if the improvements were distributed in the best possible way */
-int lower_bound(int i, int LowerBound, const VI &cs, const VI &cleft, const VS &st, const Window &w, const MI &improvements)
+int lower_bound(int i, const VI &cs, const VI &cleft, const VS &st, const Window &w, const MI &improvements)
 {
     const auto &[ce, ne] = w;
 
     if (i == -1)
         return 0;
+    int LowerBound = 0;
     for (int j = 0; j < ne.size(); ++j)
         LowerBound += lb_station(j, i, cs, cleft, st[j].line, ce[j], ne[j], improvements);
 
@@ -252,7 +266,7 @@ void exhaustive_search_rec(int i, int cp, int &mp, VI &cs, VI &cleft, VS &statio
             mp = cp;
             write_solution(cs, cp, now() - start, out);
         }
-        if (lower_bound(i - 1, cp, cs, cleft, stations, w, improvements) < mp)
+        if (lower_bound(i - 1, cs, cleft, stations, w, improvements) < mp)
         {
             for (int cl : generator)
             {
