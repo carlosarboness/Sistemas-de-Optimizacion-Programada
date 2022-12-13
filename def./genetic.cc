@@ -481,44 +481,46 @@ void refresh_population(MI &population, int &psum, const Data &data)
   }
 }
 
-void simulated_annealing(VI &solution, int &pen, const Data &data, const double &start, const string &out)
+// probability of accepting a worsening move
+double probability(double T, int diff)
 {
-  bool improve = true;
-  double probability = 0.001; // probability of accepting a worsening move
-  VI best_solution = solution;
-  int best_pen = pen;
+  return 1 / exp(diff / T);
+}
 
-  while (improve)
+void simulated_annealing(VI solution, int pen, const Data &data, const double &start, const string &out)
+{
+  int C = data.C;
+  double T = 2;
+  VI bs = solution;
+  int bp = pen;
+  while (now() - start < 59)
   {
-    for (int i = 0; i < data.C; ++i)
+    VI sp = solution;
+    swap(sp[rand() % C], sp[rand() % C]);
+    int cp = penalization(sp, data);
+
+    if (cp < pen)
     {
-      for (int j = 0; j < data.C; ++j)
+      solution = sp;
+      pen = cp;
+      if (pen < bp)
       {
-        if (i != j)
-        {
-          VI solutionMH = solution;
-          swap(solutionMH[i], solutionMH[j]);
-          int cp = penalization(solutionMH, data);
-
-          if (cp < pen or (rand() / (double)RAND_MAX) < probability)
-          {
-            solution = solutionMH;
-            pen = cp;
-
-            if (pen < best_pen)
-            {
-              best_solution = solution;
-              best_pen = pen;
-            }
-          }
-        }
+        bs = solution;
+        bp = pen;
+        write_solution(bs, bp, now() - start, out);
       }
-      probability *= 2;
     }
-    probability = 0;
-    improve = false;
+    else
+    {
+      double rndNumber = rand() / (double)RAND_MAX;
+      if (rndNumber < probability(T, cp - pen))
+      {
+        solution = sp;
+        pen = cp;
+      }
+    }
+    T = T * 0.9;
   }
-  write_solution(best_solution, best_pen, now() - start, out);
 }
 
 void genetic(const string &out, const Data &data)
@@ -590,7 +592,7 @@ void genetic(const string &out, const Data &data)
     sort_population(population);
 
     // the worst -NumChildren- individuals are expelled of the population
-    update_population(population, {}, numChildren / 2, psum, false);
+    update_population(population, {}, numChildren, psum, false);
 
     // when we notice that the solution is not improving, it may be the case we have reachead a local minimum
     // so we add some new individuals and expell some of the current population
