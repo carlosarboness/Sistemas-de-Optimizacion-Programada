@@ -7,11 +7,13 @@
 #include <algorithm>
 #include <map>
 #include <random>
+#include <set>
 using namespace std;
 
 struct Class;
 struct Station;
 struct Individual;
+using offspring = vector<vector<int>>;
 
 using VI = vector<int>;
 using MVI = vector<VI>;
@@ -41,6 +43,12 @@ struct Individual
   VI solution;
   int penalization;
   double fitness;
+};
+
+struct crossover
+{
+  map<int, int> P1map, P2map;
+  VI c1, c2;
 };
 
 double now()
@@ -214,7 +222,7 @@ void adapt_solution(VI &child, VI cleft)
   }
 }
 
-MVI mid_permutation_recombination(const VI &P1, const VI &P2, const pair<int, int> &cuts, const VI &cleft)
+void mid_permutation_recombination(const VI &P1, const VI &P2, const pair<int, int> &cuts, const VI &cleft, offspring &children)
 {
   int left = cuts.first;
   int right = cuts.second;
@@ -229,17 +237,17 @@ MVI mid_permutation_recombination(const VI &P1, const VI &P2, const pair<int, in
   adapt_solution(children1, cleft);
   adapt_solution(children2, cleft);
 
-  return {children1, children2};
+  children.push_back(children1);
+  children.push_back(children2);
 }
 
-MVI edge_permutation_recombination(const VI &P1, const VI &P2, const pair<int, int> &cuts, const VI &cleft)
+void edge_permutation_recombination(const VI &P1, const VI &P2, const pair<int, int> &cuts, const VI &cleft, offspring &children)
 {
   int C = P1.size();
   int left = cuts.first;
   int right = cuts.second;
   VI children1 = P1, children2 = P2;
 
-  // second pair of children
   for (int i = 0; i < left; ++i)
   {
     children1[i] = P2[i];
@@ -254,10 +262,11 @@ MVI edge_permutation_recombination(const VI &P1, const VI &P2, const pair<int, i
   adapt_solution(children1, cleft);
   adapt_solution(children2, cleft);
 
-  return {children1, children2};
+  children.push_back(children1);
+  children.push_back(children2);
 }
 
-MVI uniform_recombination(const VI &P1, const VI &P2, const VI &cleft)
+void uniform_recombination(const VI &P1, const VI &P2, const VI &cleft, offspring &children)
 {
   int C = P1.size();
   VI children1(C), children2(C);
@@ -279,15 +288,14 @@ MVI uniform_recombination(const VI &P1, const VI &P2, const VI &cleft)
   adapt_solution(children1, cleft);
   adapt_solution(children2, cleft);
 
-  return {children1, children2};
+  children.push_back(children1);
+  children.push_back(children2);
 }
 
-MVI partially_mapped_recombination(const VI &P1, const VI &P2, const pair<int, int> &cuts, const VI &cleft)
+crossover generate_inicial_data(const VI &P1, const VI &P2, int left, int right)
 {
   int C = P1.size();
-  int left = cuts.first;
-  int right = cuts.second;
-  map<int, int> P1map, P2map, permutations;
+  map<int, int> P1map, P2map;
   vector<bool> used(C, false);
   VI c1(C, -1), c2(C, -1);
 
@@ -311,13 +319,22 @@ MVI partially_mapped_recombination(const VI &P1, const VI &P2, const pair<int, i
     }
   }
 
+  return crossover{P1map, P2map, c1, c2};
+}
+
+void partially_mapped_recombination(const VI &P1, const VI &P2, const pair<int, int> &cuts, const VI &cleft, offspring &children)
+{
+  int C = P1.size();
+  int left = cuts.first;
+  int right = cuts.second;
+  auto [P1map, P2map, c1, c2] = generate_inicial_data(P1, P2, left, right);
+  map<int, int> permutations;
+
   for (int i = left; i <= right; ++i)
   {
-    int k = c1[i];
-    c1[i] = c2[i];
-    c2[i] = k;
     permutations[c1[i]] = c2[i];
     permutations[c2[i]] = c1[i];
+    swap(c1[i], c2[i]);
   }
 
   for (int i = 0; i < left; ++i)
@@ -345,19 +362,81 @@ MVI partially_mapped_recombination(const VI &P1, const VI &P2, const pair<int, i
   adapt_solution(children1, cleft);
   adapt_solution(children2, cleft);
 
-  return {children1, children2};
+  children.push_back(children1);
+  children.push_back(children2);
 }
 
-MVI recombinate(const VI &P1, const VI &P2, const VI &cleft)
+set<int> generate_set(int C)
+{
+  set<int> S;
+  for (int i = 0; i < C; ++i)
+    S.insert(i);
+  return S;
+}
+
+void order_recombination(const VI &P1, const VI &P2, const pair<int, int> &cuts, offspring &children)
 {
   int C = P1.size();
+  int left = cuts.first;
+  int right = cuts.second;
+  auto [P1map, P2map, c1, c2] = generate_inicial_data(P1, P2, left, right);
 
-  MVI c1 = mid_permutation_recombination(P1, P2, generate_random_cut_points(C), cleft);
-  MVI c2 = edge_permutation_recombination(P2, P2, generate_random_cut_points(C), cleft);
-  MVI c3 = partially_mapped_recombination(P1, P2, generate_random_cut_points(C), cleft);
-  MVI c4 = uniform_recombination(P1, P2, cleft);
+  set<int> s1, s2;
+  s1 = s2 = generate_set(C);
+  VI order1, order2;
+  order1.reserve(C - (right - left + 1));
+  order2.reserve(C - (right - left + 1));
 
-  return {c1[0], c1[1], c2[0], c2[1], c3[0], c3[1], c4[0], c4[1]};
+  for (int i = left; i <= right; ++i)
+  {
+    s1.erase(c1[i]);
+    s2.erase(c2[i]);
+  }
+
+  for (int i = 0; i < C; ++i)
+  {
+    if (s1.count(c2[i]))
+      order1.push_back(c2[i]);
+
+    if (s2.count(c1[i]))
+      order2.push_back(c1[i]);
+  }
+
+  int i = 0;
+  for (int j = 0; j < order1.size(); ++j)
+  {
+    if (i == left)
+      i = right + 1;
+    c1[i] = order1[j];
+    c2[i] = order2[j];
+    ++i;
+  }
+
+  VI children1(C), children2(C);
+  for (int i = 0; i < C; ++i)
+  {
+    children1[i] = P1map[c1[i]];
+    children2[i] = P2map[c2[i]];
+  }
+
+  children.push_back(children1);
+  children.push_back(children2);
+}
+
+offspring recombinate(const VI &P1, const VI &P2, const VI &cleft)
+{
+  int C = P1.size();
+  int numChildren = 10;
+  offspring children;
+  children.reserve(numChildren);
+
+  mid_permutation_recombination(P1, P2, generate_random_cut_points(C), cleft, children);
+  edge_permutation_recombination(P1, P2, generate_random_cut_points(C), cleft, children);
+  partially_mapped_recombination(P1, P2, generate_random_cut_points(C), cleft, children);
+  order_recombination(P1, P2, generate_random_cut_points(C), children);
+  uniform_recombination(P1, P2, cleft, children);
+
+  return children;
 }
 
 MI recombination(const VI &P1, const VI &P2, const Data &data)
@@ -428,24 +507,23 @@ int roulette_wheel_selection(const MI &parents)
   return pick;
 }
 
-void update_population(MI &parents, const MI &children, int numChildren, int &psum, const bool &add)
+void update_population(MI &population, const MI &children, int &psum)
 {
+  int population_size = population.size();
+  int numChildren = children.size();
 
-  if (add)
+  for (int i = 0; i < numChildren; ++i)
   {
-    for (int i = 0; i < numChildren; ++i)
-    {
-      parents.push_back(children[i]);
-      psum += children[i].penalization;
-    }
+    psum -= population.back().penalization;
+    population.pop_back();
   }
-  else
+
+  population.reserve(population_size);
+
+  for (int i = 0; i < numChildren; ++i)
   {
-    for (int i = 0; i < numChildren; ++i)
-    {
-      psum -= parents.back().penalization;
-      parents.pop_back();
-    }
+    population.push_back(children[i]);
+    psum += children[i].penalization;
   }
 }
 
@@ -523,10 +601,11 @@ void simulated_annealing(VI current_solution, int current_pen, const Data &data,
 
   VI best_solution = current_solution; // saves the better solution
   int best_penalization = current_pen; // saves the lowest penalization
-  double T = 10;                       // inicial temperature
+  double T = 100;                      // inicial temperature
 
   while (now() - start < 59)
   {
+    cout << T << endl;
     VI neighbour = current_solution;
     swap(neighbour[rand() % C], neighbour[rand() % C]); // select the neighbour
     int pen = penalization(neighbour, data);            // count its penalization
@@ -553,7 +632,7 @@ void simulated_annealing(VI current_solution, int current_pen, const Data &data,
       }
     }
 
-    T = T * 0.9; // update (decrease) the temperature
+    T = T * 0.95; // update (decrease) the temperature
   }
 }
 
@@ -571,8 +650,7 @@ void genetic(const string &out, const Data &data)
   int individual_with_less_penalization = 0;
   Individual best_individual = population[individual_with_less_penalization]; // saves the best individual ever generated
 
-  int numChildren = 8;             // number of children generated in each generation
-  double refreshing_rate = 0.5;    // indicates how fast the population is refreshed
+  double refreshing_rate = 0.2;    // indicates how fast the population is refreshed
   double mutation_probability = 0; // inicial mutation probability, will increase during the generations
 
   // termination conditions: we stop if in the last -termination_condition- generations hasn't been an
@@ -581,7 +659,7 @@ void genetic(const string &out, const Data &data)
   int tc = generations_without_improvements;
 
   // do genetic algorithm while termination conditions are not met or until the selected time has expired
-  while (tc > 0 and (now() - start) < 50)
+  while (tc > 0 and (now() - start) < 0)
   {
     // execute the roulette wheel selection method to select 2 parents
     int pick1 = roulette_wheel_selection(population);
@@ -601,13 +679,10 @@ void genetic(const string &out, const Data &data)
     mutation(children, mutation_probability, data);
 
     // the children are introduced into the population
-    update_population(population, children, numChildren, psum, true);
+    update_population(population, children, psum);
 
     // sorts the population by penalization, less penalizations solutions go first
     sort_population(population);
-
-    // the worst -NumChildren- individuals are expelled of the population (we mantain the population size)
-    update_population(population, children, numChildren, psum, false);
 
     // when we notice that the solution is not improving, it may be the case we have reachead a local minimum
     // so we add some new individuals and expell some of the current population
