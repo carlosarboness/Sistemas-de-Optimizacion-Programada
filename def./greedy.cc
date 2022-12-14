@@ -72,7 +72,7 @@ void write_solution(const VI &cs, int cp, const double &elapsed_time, const stri
     f.close();
 }
 
-////////////// Functions for both greedies
+/////// Common funcitons of both greedies ////////
 /* Updates each individual line and retuns the penalitzations of it */
 int add_car(int bit, Station &st, int ce_i, int ne_i, bool end)
 {
@@ -138,6 +138,10 @@ int count_penalization_cs(const VI &sol, const Data &data)
     return total_penalization;
 }
 
+/* Returns the approximate cost (penalization) of improving a car of a class
+with improvements imp_i if before or after has improvements imp_j.
+The approximate cost is the sum the ne / ce of the stations that both classes
+of cars need the improvements*/
 double calculate_cost(const Window &w, const VI &imp_i, const VI &imp_j)
 {
     const auto &[ce, ne] = w;
@@ -148,28 +152,17 @@ double calculate_cost(const Window &w, const VI &imp_i, const VI &imp_j)
             cost += ne[k] / ce[k];
     return cost;
 }
-////////////////////
+//////////////////////////////////////////////////
 
-////////////////// Greedy1
-// returns the argmax of VI
-int most_cleft_index(const VI &cleft)
-{
-    auto it = max_element(cleft.begin(), cleft.end());
-    return distance(cleft.begin(), it);
-}
-
-int best_car(VI &cleft, const VD &costs)
-{
-    fit bf;
-
-    for (int i = 0; i < cleft.size(); ++i)
-        if (cleft[i] > 0 and (cleft[i] > bf.cl or (cleft[i] == bf.cl and costs[i] < bf.cost)))
-            bf = fit{i, cleft[i], costs[i]};
-
-    --cleft[bf.id_car];
-    return bf.id_car;
-}
-
+//////////////////// Greedy 1 ////////////////////
+/*
+Idea: improve the cars of the class with more cars left as soon as possible
+Algorithm: while there are cars left of a particular class, select the available car
+        that has more cars left. If there is a tie, choose the one with less aproximate
+        cost (penalization). If there is a tie, pick the one with the lowest index.
+*/
+/* Returns a matrix with the approximate cost (penalization) of improving a
+car of the j-th class if the last car improved was from the i-th class. */
 MD generate_costs_matrix(const Data &data)
 {
     const auto &[C, M, K, w, improvements] = data;
@@ -183,15 +176,35 @@ MD generate_costs_matrix(const Data &data)
         }
     return costs;
 }
+/* Returns the argmax of the VI cleft */
+int most_cleft_index(const VI &cleft)
+{
+    auto it = max_element(cleft.begin(), cleft.end());
+    return distance(cleft.begin(), it);
+}
 
+/* Returns the best class of cars to be improved next following the greedy algorithm given
+the vector of costsof the last car of the solution and the cleft of all the classes of cars */
+int best_car(VI &cleft, const VD &costs)
+{
+    fit bf;
+
+    for (int i = 0; i < cleft.size(); ++i)
+        if (cleft[i] > 0 and (cleft[i] > bf.cl or (cleft[i] == bf.cl and costs[i] < bf.cost)))
+            bf = fit{i, cleft[i], costs[i]};
+
+    --cleft[bf.id_car];
+    return bf.id_car;
+}
+
+/* Given the data of the problem, the solution using the greedy algorithm 1 is returned */
 VI gen_sol_greedy1(const Data &data, VI &cleft)
 {
 
     MD costs = generate_costs_matrix(data);
 
-    // Calculate solution
     VI solution(data.C);
-
+    // The first car to be improved is the one of the class with mores cars left
     solution[0] = most_cleft_index(cleft);
     --cleft[solution[0]];
     for (int k = 1; k < data.C; ++k)
@@ -199,9 +212,15 @@ VI gen_sol_greedy1(const Data &data, VI &cleft)
 
     return solution;
 }
-//////////////////
+//////////////////////////////////////////////////
 
-/////////////// Greedy2
+//////////////////// Greedy 2 ////////////////////
+/*
+Idea: improve the cars of the class better fitness as soon as possible
+Algorithm: while there are cars left of a particular class, select the available car
+        that has better fitness. If there is a tie, choose the one with mone cars
+        left of its class. If there is a tie, pick the one with the lowest index.
+*/
 // returns the argmax of V
 int argmax(const VI &vi, const VD &vd)
 {
@@ -297,15 +316,19 @@ VI gen_sol_greedy2(const Data &data, VI &cleft)
 
     return solution;
 }
-////////////////
+//////////////////////////////////////////////////
 
+/* Given a data and the output file name writes in the output file the best
+solution of running two greedy algorithms */
 void greedy(const Data &data, VI &cleft, const string &out)
 {
     double start = now();
-    VI cleft2 = cleft;
+    VI cleft2 = cleft; // we make a copy of cleft to use it in the second greedy
+
     VI sol1 = gen_sol_greedy1(data, cleft);
     int pen1 = count_penalization_cs(sol1, data);
     write_solution(sol1, pen1, now() - start, out);
+
     VI sol2 = gen_sol_greedy2(data, cleft2);
     int pen2 = count_penalization_cs(sol2, data);
     if (pen2 < pen1)
