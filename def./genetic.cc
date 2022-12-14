@@ -114,24 +114,27 @@ MVI createSM(const VI &P, int C, int M, const MVI &improvements)
       SM[j][i] = improvements[P[i]][j];
   return SM;
 }
-
+/* Counts the penalization of the solution in P */
 int penalization(const VI &P, const Data &data)
 {
-
+  // generate the matrix with the stations representation, to make easier the counting
   MVI stations_matrix = createSM(P, data.C, data.M, data.improvements);
   int total_pen = 0;
 
+  // for each station count its penalziation
   for (int i = 0; i < data.M; ++i)
     total_pen += count_penalization(stations_matrix[i], data.w.ce[i], data.w.ne[i]);
+
   return total_pen;
 }
-
-void generate_permutation(VI &parent)
+/* permutates randomly the elements of the vector -individual- */
+void generate_permutation(VI &individual)
 {
-  // shuffle(parent.begin(), parent.end(), default_random_engine(parent.size()));
-  random_shuffle(parent.begin(), parent.end());
+  // shuffle(individual.begin(), individual.end(), default_random_engine(individual.size()));
+  random_shuffle(individual.begin(), individual.end());
 }
-
+/* Returns a vector of size C in which the elements are the classes that the final solution will contain
+the elements of the final solution in order */
 VI create_generator_individual(int C, const VI &cleft)
 {
   VI individual;
@@ -145,35 +148,48 @@ VI create_generator_individual(int C, const VI &cleft)
   return individual;
 }
 
-bool improved(Individual &best_individual, const Individual &P)
+/* Returns true if the current_best_individual is better than the best_individual ever found,
+else returns false. If returns true it also updates the best_individual*/
+bool improved(Individual &best_individual, const Individual &current_best_individual)
 {
-  if (P.penalization < best_individual.penalization)
+  if (current_best_individual.fitness < best_individual.fitness)
   {
-    best_individual = P;
+    best_individual = current_best_individual;
     return true;
   }
   return false;
 }
 
-bool best_fit(const Individual &P1, const Individual &P2)
+/* Auxiliar comparating function for -sort_population()-. Individuals with less penalzaitions go first */
+bool lower_penalization_first(const Individual &P1, const Individual &P2)
 {
   return P1.penalization < P2.penalization;
 }
 
+/* Input is a matrix of indivuals. We sort this individuals by -lower_penalization_first- criteria defined above */
 void sort_population(MI &population)
 {
-  sort(population.begin(), population.end(), best_fit);
+  sort(population.begin(), population.end(), lower_penalization_first);
 }
 
-VI generate_random_cut_points(int C)
+/* Returns a pair of two integers corresponding to two random cuts in range [0, C).
+The first cut is always lower that the second one (by construction of the distributions. */
+pair<int, int> generate_random_cut_points(int C)
 {
-  random_device rd;                            // obtain a random number from hardware
-  mt19937 gen(rd());                           // seed the generator
-  uniform_int_distribution<> distr1(0, C - 2); // define the range
-  int cut1 = distr1(gen);
-  uniform_int_distribution<> distr2(cut1 + 1, C - 1);
-  int cut2 = distr2(gen);
-  return {cut1, cut2};
+  random_device rng;  // obtain a random number from hardware
+  mt19937 gen(rng()); // seed the generator
+
+  uniform_int_distribution<int> distribution1(0, C - 2); // uniform distribution in range[0, C-2]
+  int first_cut_point = distribution1(gen);              // get a number in that range with uniform probability
+
+  // uniform distribution at the right part of the first cut
+  uniform_int_distribution<int> distribution2(first_cut_point + 1, C - 1);
+  int second_cut_point = distribution2(gen); // get a number in that range with uniform probability
+
+  // create the pair of cuts
+  pair<int, int> cuts(first_cut_point, second_cut_point);
+
+  return cuts;
 }
 
 int most_cleft_index(const VI &cleft)
@@ -198,10 +214,10 @@ void adapt_solution(VI &child, VI cleft)
   }
 }
 
-MVI mid_permutation_recombination(const VI &P1, const VI &P2, const VI &cuts, const VI &cleft)
+MVI mid_permutation_recombination(const VI &P1, const VI &P2, const pair<int, int> &cuts, const VI &cleft)
 {
-  int left = cuts[0];
-  int right = cuts[1];
+  int left = cuts.first;
+  int right = cuts.second;
   VI children1 = P1, children2 = P2;
 
   for (int i = left; i <= right; ++i)
@@ -216,11 +232,11 @@ MVI mid_permutation_recombination(const VI &P1, const VI &P2, const VI &cuts, co
   return {children1, children2};
 }
 
-MVI edge_permutation_recombination(const VI &P1, const VI &P2, const VI &cuts, const VI &cleft)
+MVI edge_permutation_recombination(const VI &P1, const VI &P2, const pair<int, int> &cuts, const VI &cleft)
 {
   int C = P1.size();
-  int left = cuts[0];
-  int right = cuts[1];
+  int left = cuts.first;
+  int right = cuts.second;
   VI children1 = P1, children2 = P2;
 
   // second pair of children
@@ -266,11 +282,11 @@ MVI uniform_recombination(const VI &P1, const VI &P2, const VI &cleft)
   return {children1, children2};
 }
 
-MVI partially_mapped_recombination(const VI &P1, const VI &P2, const VI &cuts, const VI &cleft)
+MVI partially_mapped_recombination(const VI &P1, const VI &P2, const pair<int, int> &cuts, const VI &cleft)
 {
   int C = P1.size();
-  int left = cuts[0];
-  int right = cuts[1];
+  int left = cuts.first;
+  int right = cuts.second;
   map<int, int> P1map, P2map, permutations;
   vector<bool> used(C, false);
   VI c1(C, -1), c2(C, -1);
@@ -433,8 +449,11 @@ void update_population(MI &parents, const MI &children, int numChildren, int &ps
   }
 }
 
+/* Returns a vector of individuals, that is the inicial random generated population, int he variable psum
+we save the sum of all the individuals penalization, in order to save computations later */
 MI generate_inicial_population(const Data &data, int &psum)
 {
+  // vector with all the cars classes in order (p.e [0, 0, 0, 1, 1, 1, 2, 2, 2, 2])
   VI Generator = create_generator_individual(data.C, data.cleft);
 
   // select the population size (it will remain constant during the iterations)
@@ -444,7 +463,7 @@ MI generate_inicial_population(const Data &data, int &psum)
 
   for (int i = 0; i < psize; ++i)
   {
-    generate_permutation(Generator);
+    generate_permutation(Generator); // random permutation of the vector generator, that is a new individual
     inicial_population[i] = Individual{Generator, penalization(Generator, data), UNDEFINED};
     psum += inicial_population[i].penalization;
   }
@@ -459,11 +478,16 @@ int check(const int &pick1, const int &pick2)
   return (pick2 - 1 >= 0 ? pick2 - 1 : pick2 + 1);
 }
 
+/* A percentatge of the current population is replaced by new random generated individuals in order to trying to
+escape from a local minima. The sum of the total penalizations is updated with the new individuals penalization */
 void refresh_population(MI &population, int &psum, const Data &data)
 {
   int psize = population.size();
+  // percentatge of population replaced, only 10% of individuals of the current
+  // population will remain in the next genration, the other individuals will be replaced
+  double PopulationReplacedSize = 0.9;
 
-  for (int i = 0; i < psize - 1; ++i)
+  for (int i = 0; i < psize * PopulationReplacedSize; ++i)
   {
     psum -= population.back().penalization;
     population.pop_back();
@@ -472,6 +496,7 @@ void refresh_population(MI &population, int &psum, const Data &data)
   population.reserve(psize);
 
   VI Generator = create_generator_individual(data.C, data.cleft);
+
   while (population.size() < psize)
   {
     generate_permutation(Generator);
@@ -481,45 +506,54 @@ void refresh_population(MI &population, int &psum, const Data &data)
   }
 }
 
-// probability of accepting a worsening move
-double probability(double T, int diff)
+/* Returns the probability of accepting a worsening move following the Bolltzman distribution
+Precondition: diff >= 0*/
+double probability(const double &T, int diff)
 {
   return 1 / exp(diff / T);
 }
 
-void simulated_annealing(VI solution, int pen, const Data &data, const double &start, const string &out)
+/* Metaheuristics applied to solution to try to find a better one. In each iteration we visit a neighbour
+of our current solution. If this neighbour is a better one, we keep it, if not we also keep with some
+probability that will decrease during the iterations. Each time a better solution is found is  written in
+the -out- file. */
+void simulated_annealing(VI current_solution, int current_pen, const Data &data, const double &start, const string &out)
 {
   int C = data.C;
-  double T = 2;
-  VI bs = solution;
-  int bp = pen;
+
+  VI best_solution = current_solution; // saves the better solution
+  int best_penalization = current_pen; // saves the lowest penalization
+  double T = 10;                       // inicial temperature
+
   while (now() - start < 59)
   {
-    VI sp = solution;
-    swap(sp[rand() % C], sp[rand() % C]);
-    int cp = penalization(sp, data);
+    VI neighbour = current_solution;
+    swap(neighbour[rand() % C], neighbour[rand() % C]); // select the neighbour
+    int pen = penalization(neighbour, data);            // count its penalization
 
-    if (cp < pen)
+    if (pen < current_pen)
     {
-      solution = sp;
-      pen = cp;
-      if (pen < bp)
+      current_solution = neighbour;
+      current_pen = pen;
+
+      if (current_pen < best_penalization)
       {
-        bs = solution;
-        bp = pen;
-        write_solution(bs, bp, now() - start, out);
+        best_solution = current_solution;
+        best_penalization = current_pen;
+        write_solution(best_solution, best_penalization, now() - start, out);
       }
     }
     else
     {
       double rndNumber = rand() / (double)RAND_MAX;
-      if (rndNumber < probability(T, cp - pen))
+      if (rndNumber < probability(T, pen - current_pen))
       {
-        solution = sp;
-        pen = cp;
+        current_solution = neighbour;
+        current_pen = pen;
       }
     }
-    T = T * 0.9;
+
+    T = T * 0.9; // update (decrease) the temperature
   }
 }
 
@@ -527,27 +561,29 @@ void genetic(const string &out, const Data &data)
 {
   double start = now(); // inicialize the counter
 
-  int individual_with_less_penalization = 0;
   int psum = UNDEF;                                        // total sum of penalization of the enitre population
   MI population = generate_inicial_population(data, psum); // random generated vector of parents (inicial population)
-  int numChildren = 8;
-  double mutation_probability = 0;
 
-  update_fitness(population, psum);
-  sort_population(population);
+  update_fitness(population, psum); // updates the fitness of every individual in the population
+  sort_population(population);      // sorts the population by penalization, less penalizations solutions go first
 
-  Individual best_individual = population[individual_with_less_penalization];
+  // after sorting the individual with less penalizations will be in the postion 0 of the vector
+  int individual_with_less_penalization = 0;
+  Individual best_individual = population[individual_with_less_penalization]; // saves the best individual ever generated
 
-  // termination conditions: we stop if in the last -termination_condition- generations
-  // it hasn't been an iMIrovement in the solution
-  int termination_conditions = 100000;
-  int tc = termination_conditions;
+  int numChildren = 8;             // number of children generated in each generation
+  double refreshing_rate = 0.5;    // indicates how fast the population is refreshed
+  double mutation_probability = 0; // inicial mutation probability, will increase during the generations
 
-  // do genetic algorithm while termination conditions aren't accoMIlished or until the
-  // time has expired
+  // termination conditions: we stop if in the last -termination_condition- generations hasn't been an
+  // improvement in the solution. This parameter can be changed depending on the statement
+  int generations_without_improvements = 100000;
+  int tc = generations_without_improvements;
+
+  // do genetic algorithm while termination conditions are not met or until the selected time has expired
   while (tc > 0 and (now() - start) < 50)
   {
-
+    // execute the roulette wheel selection method to select 2 parents
     int pick1 = roulette_wheel_selection(population);
     int pick2 = roulette_wheel_selection(population);
 
@@ -555,29 +591,8 @@ void genetic(const string &out, const Data &data)
     Individual Parent1 = population[pick1];
     Individual Parent2 = population[check(pick1, pick2)]; // we want to make sure to select differt parents
 
-    // cout << pick1 << " " << pick2 << endl;
     //  -numChildren- children are generated by recombination from the previous parents
     MI children = recombination(Parent1.solution, Parent2.solution, data);
-
-    /*
-    for (auto &d : Parent1.solution)
-      cout << d << " ";
-    cout << "pen: " << Parent1.penalization;
-    cout << endl;
-    for (auto &d : Parent2.solution)
-      cout << d << " ";
-    cout << "pen: " << Parent2.penalization;
-    cout << endl;
-    cout << "-------------------" << endl;
-    for (auto &m : children)
-    {
-      for (auto &d : m.solution)
-        cout << d << " ";
-      cout << "pen: " << m.penalization << endl;
-      cout << endl;
-    }
-    cout << endl;
-    */
 
     // mutation probability increases during the generations in order to avoid reaching a local minimum
     mutation_probability += 0.001;
@@ -588,18 +603,18 @@ void genetic(const string &out, const Data &data)
     // the children are introduced into the population
     update_population(population, children, numChildren, psum, true);
 
-    // the full population is sorted by fitness, best individuals appear fisrt
+    // sorts the population by penalization, less penalizations solutions go first
     sort_population(population);
 
-    // the worst -NumChildren- individuals are expelled of the population
-    update_population(population, {}, numChildren, psum, false);
+    // the worst -NumChildren- individuals are expelled of the population (we mantain the population size)
+    update_population(population, children, numChildren, psum, false);
 
     // when we notice that the solution is not improving, it may be the case we have reachead a local minimum
     // so we add some new individuals and expell some of the current population
-    if (tc < termination_conditions / 2)
+    if (tc < generations_without_improvements * refreshing_rate)
       refresh_population(population, psum, data);
 
-    // the fitness of each individual is updated
+    // updates the fitness of every individual in the population
     update_fitness(population, psum);
 
     // if the best individual in our current population is better than the best individual ever found,
@@ -608,13 +623,14 @@ void genetic(const string &out, const Data &data)
     if (improved(best_individual, population[individual_with_less_penalization]))
     {
       write_solution(best_individual.solution, best_individual.penalization, now() - start, out);
-      tc = termination_conditions; // restart the termination conditions
-      mutation_probability = 0;
+      tc = generations_without_improvements; // restart the termination conditions
+      mutation_probability = 0;              // restart the mutation probability
     }
     else
       --tc;
   }
-
+  // After finishing the genetic algorithm we apply a simulated annealing heuristics to the best individual
+  // ever found to try to improve the solution slighlty
   simulated_annealing(best_individual.solution, best_individual.penalization, data, start, out);
 
   /*
