@@ -605,7 +605,7 @@ void simulated_annealing(VI current_solution, int current_pen, const Data &data,
 
   while (now() - start < 59)
   {
-    cout << T << endl;
+    // cout << T << endl;
     VI neighbour = current_solution;
     swap(neighbour[rand() % C], neighbour[rand() % C]); // select the neighbour
     int pen = penalization(neighbour, data);            // count its penalization
