@@ -126,18 +126,6 @@ VS inicialize_stations(int C, int M)
     return stations;
 }
 
-int count_penalization_cs(const VI &sol, const Data &data)
-{
-    const auto &[C, M, K, w, improvements] = data;
-
-    VS stations = inicialize_stations(C, M);
-
-    int total_penalization = 0;
-    for (int i = 0; i < C; ++i)
-        total_penalization += update_station_cs(improvements[sol[i]], stations, w, i == C - 1);
-    return total_penalization;
-}
-
 /* Returns the approximate cost (penalization) of improving a car of a class
 with improvements imp_i if before or after has improvements imp_j.
 The approximate cost is the sum the ne / ce of the stations that both classes
@@ -151,6 +139,13 @@ double calculate_cost(const Window &w, const VI &imp_i, const VI &imp_j)
         if (imp_i[k] == 1 and imp_j[k] == 1)
             cost += ne[k] / ce[k];
     return cost;
+}
+
+/* Returns the argmax of the VI cleft */
+int most_cleft_index(const VI &cleft)
+{
+    auto it = max_element(cleft.begin(), cleft.end());
+    return distance(cleft.begin(), it);
 }
 //////////////////////////////////////////////////
 
@@ -176,12 +171,6 @@ MD generate_costs_matrix(const Data &data)
         }
     return costs;
 }
-/* Returns the argmax of the VI cleft */
-int most_cleft_index(const VI &cleft)
-{
-    auto it = max_element(cleft.begin(), cleft.end());
-    return distance(cleft.begin(), it);
-}
 
 /* Returns the best class of cars to be improved next following the greedy algorithm given
 the vector of costsof the last car of the solution and the cleft of all the classes of cars */
@@ -197,18 +186,26 @@ int best_car(VI &cleft, const VD &costs)
     return bf.id_car;
 }
 
-/* Given the data of the problem, the solution using the greedy algorithm 1 is returned */
-VI gen_sol_greedy1(const Data &data, VI &cleft)
+/* Given the data of the problem, the solution using the greedy algorithm 1 is returned
+and the penalization of the solution is stored in pen */
+VI gen_sol_greedy1(const Data &data, VI &cleft, int &pen)
 {
+    const auto &[C, M, K, w, improvements] = data;
 
+    VS stations = inicialize_stations(C, M);
     MD costs = generate_costs_matrix(data);
 
-    VI solution(data.C);
+    VI solution(C);
     // The first car to be improved is the one of the class with mores cars left
     solution[0] = most_cleft_index(cleft);
     --cleft[solution[0]];
-    for (int k = 1; k < data.C; ++k)
+    pen += update_station_cs(improvements[solution[0]], stations, w, false);
+
+    for (int k = 1; k < C; ++k)
+    {
         solution[k] = best_car(cleft, costs[solution[k - 1]]);
+        pen += update_station_cs(improvements[solution[k]], stations, w, k == C - 1);
+    }
 
     return solution;
 }
@@ -236,6 +233,29 @@ int argmax(const VI &vi, const VD &vd)
     }
 }
 
+/* Given the data of the problem and the cars left, returns the fitness matrix.
+The fitness matrix has in the i-th row, the fitness from improving a car of class j
+given that the last car was form the class i.
+The fitness is a ratio dividing the cars left of the class j and the approximate cost
+(penalization) of improving a car of the class j if the last car improved was from the
+class i. */
+MD generate_fitness_matrix(const Data &data, const VI &cleft)
+{
+    const auto &[C, M, K, w, improvements] = data;
+
+    MD fitness(K, VD(K));
+    for (int i = 0; i < K; ++i)
+        for (int j = 0; j < K; ++j)
+        {
+            double c = calculate_cost(w, improvements[i], improvements[j]);
+            fitness[i][j] = (double)cleft[j] / (c == 0 ? 1 : c); // els que queden dividit pel "cost"
+        }
+    return fitness;
+}
+
+/* Given the id_car of the last class of cars to be improved, the fitness matix and
+cleft is updated. The ratio of the column id_car is updated with the new cleft.
+Prec: cleft[id_car] >= 1 */
 void update_fitness(int id_car, MD &fitness, VI &cleft)
 {
     int K = cleft.size();
@@ -247,6 +267,19 @@ void update_fitness(int id_car, MD &fitness, VI &cleft)
     --cleft[id_car];
 }
 
+/* Creates the vector of the solution with the first class of cars to be improved and
+updates the fitness matrix and cleft. This class is the one with more cars left. */
+VI base_case(int C, VI &cleft, MD &fitness)
+{
+    VI solution(C);
+    int base = argmax(cleft, {});
+    solution[0] = base;
+    update_fitness(base, fitness, cleft);
+    return solution;
+}
+
+/* Given a vector of fitness and cars left, returs the id of the class of cars
+following the greedy algorithm 2 */
 int best(const VD &f, VI &cleft)
 {
     int id = UNDEF;
@@ -261,6 +294,8 @@ int best(const VD &f, VI &cleft)
     return id;
 }
 
+/* Returns the best fit following the greedy algorithm 2 given the last class of
+cars improved is id_last_car and updates the fitness matrix and cleft. */
 int best_fit(VI &cleft, MD &fitness, int id_last_car)
 {
 
@@ -269,50 +304,92 @@ int best_fit(VI &cleft, MD &fitness, int id_last_car)
     return id_car;
 }
 
-double calculate_cost2(const Window &w, const VI &imp_i, const VI &imp_j)
-{
-    const auto &[ce, ne] = w;
-    double cost = 0;
-
-    for (int k = 0; k < ce.size(); ++k)
-        if (imp_i[k] == 1 and imp_j[k] == 1)
-            cost += ne[k] / ce[k];
-
-    return cost;
-}
-
-MD generate_fitness_matrix(const Data &data, const VI &cleft)
+/* Given the data of the problem, the solution using the greedy algorithm 2 is returned
+and the penalization of the solution is stored in pen */
+VI gen_sol_greedy2(const Data &data, VI &cleft, int &pen)
 {
     const auto &[C, M, K, w, improvements] = data;
 
-    MD fitness(K, VD(K));
-    for (int i = 0; i < K; ++i)
-        for (int j = 0; j < K; ++j)
-        {
-            double c = calculate_cost2(w, improvements[i], improvements[j]);
-            fitness[i][j] = (double)cleft[j] / (c == 0 ? 1 : c); // els que queden dividit pel "cost"
-        }
-    return fitness;
-}
-
-VI base_case(int C, VI &cleft, MD &fitness)
-{
-    VI solution(C);
-    int base = argmax(cleft, {});
-    solution[0] = base;
-    update_fitness(base, fitness, cleft);
-    return solution;
-}
-
-VI gen_sol_greedy2(const Data &data, VI &cleft)
-{
+    VS stations = inicialize_stations(C, M);
     MD fitness = generate_fitness_matrix(data, cleft);
 
     // Calculate solution
     VI solution = base_case(data.C, cleft, fitness);
+    pen += update_station_cs(improvements[solution[0]], stations, w, false);
 
-    for (int k = 1; k < data.C; ++k)
+    for (int k = 1; k < C; ++k)
+    {
         solution[k] = best_fit(cleft, fitness, solution[k - 1]);
+        pen += update_station_cs(improvements[solution[k]], stations, w, k == C - 1);
+    }
+    return solution;
+}
+//////////////////////////////////////////////////
+
+//////////////////// Greedy 3 ////////////////////
+/*
+Idea: improve the cars of the class that supposes less penalization in that moment
+Algorithm: while there are cars left of a particular class, select the available car
+        that add less penalization. If there is a tie, choose the one with more
+        cars left. If there is a tie, pick the one with the lowest index.
+*/
+
+/* Returns the penalization of improving next the car with improvements imp
+given the current state of the stations */
+int try_station(const VI &imp, VS stations, const Window &w, bool end)
+{
+    const auto &[ce, ne] = w;
+
+    int M = ce.size();
+    int total_penalization = 0;
+    for (int i = 0; i < M; ++i)
+        total_penalization += add_car(imp[i], stations[i], ce[i], ne[i], end);
+    return total_penalization;
+}
+
+/* Returns the best class of cars to be improved next following the greedy algoritm 3.
+It also updates the stations and cleft */
+int less_pen(VI &cleft, const Data &data, const VS &stations, bool end)
+{
+    const auto &[C, M, K, w, improvements] = data;
+
+    int id = 0;
+    int pen = INT_MAX;
+    for (int i = 0; i < K; ++i)
+    {
+        if (cleft[i] > 0)
+        {
+            int c = try_station(improvements[i], stations, w, end);
+            if (c < pen or (c == pen and cleft[i] > cleft[id]))
+            {
+                pen = c;
+                id = i;
+            }
+        }
+    }
+    --cleft[id];
+    return id;
+}
+
+/* Given the data of the problem, the solution using the greedy algorithm 1 is returned
+and the penalization of the solution is stored in pen */
+VI gen_sol_greedy3(const Data &data, VI &cleft, int &pen)
+{
+    const auto &[C, M, K, w, improvements] = data;
+
+    VI solution(C);
+    VS stations = inicialize_stations(C, M);
+
+    // The first car to be improved is the one of the class with mores cars left
+    solution[0] = most_cleft_index(cleft);
+    --cleft[solution[0]];
+    pen += update_station_cs(improvements[solution[0]], stations, w, false);
+
+    for (int k = 1; k < C; ++k)
+    {
+        solution[k] = less_pen(cleft, data, stations, k == C - 1);
+        pen += update_station_cs(improvements[solution[k]], stations, w, k == C - 1);
+    }
 
     return solution;
 }
@@ -320,19 +397,28 @@ VI gen_sol_greedy2(const Data &data, VI &cleft)
 
 /* Given a data and the output file name writes in the output file the best
 solution of running two greedy algorithms */
-void greedy(const Data &data, VI &cleft, const string &out)
+void greedy(const Data &data, VI &cleft1, const string &out)
 {
     double start = now();
-    VI cleft2 = cleft; // we make a copy of cleft to use it in the second greedy
+    VI cleft2 = cleft1; // we make a copy of cleft to use it in the second greedy
+    VI cleft3 = cleft1; // we make a copy of cleft to use it in the second greedy
 
-    VI sol1 = gen_sol_greedy1(data, cleft);
-    int pen1 = count_penalization_cs(sol1, data);
+    int pen1 = 0;
+    VI sol1 = gen_sol_greedy1(data, cleft1, pen1);
     write_solution(sol1, pen1, now() - start, out);
 
-    VI sol2 = gen_sol_greedy2(data, cleft2);
-    int pen2 = count_penalization_cs(sol2, data);
+    int pen2 = 0;
+    VI sol2 = gen_sol_greedy2(data, cleft2, pen2);
     if (pen2 < pen1)
         write_solution(sol2, pen2, now() - start, out);
+
+    int pen3 = 0;
+    VI sol3 = gen_sol_greedy3(data, cleft3, pen3);
+    if (pen3 < min(pen1, pen2))
+        write_solution(sol3, pen3, now() - start, out);
+
+    // cout << pen1 << ' ' << pen2 << ' ' << pen3 << endl;
+    // cout << min(min(pen3, pen2), pen1) << ' ' << (min(min(pen3, pen2), pen1) == pen1) << ' ' << (min(min(pen3, pen2), pen1) == pen2) << ' ' << (min(min(pen3, pen2), pen1) == pen3) << endl;
 }
 
 void read_input(is &in, Data &data, VI &cleft)
