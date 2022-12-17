@@ -157,13 +157,13 @@ void run_algorithm(VI current_solution, int current_pen, double t, const double 
   {
     //  select a neighbour from the current solution
     VI neighbour = select_neighbour(current_solution);
-    int pen = penalization(neighbour, data); // calculate the penalization of the neighbour
-    int delta = current_pen - pen;           // difference of performance
+    int neighbour_pen = penalization(neighbour, data); // calculate the penalization of the neighbour
+    int delta = current_pen - neighbour_pen;           // difference of performance
 
-    if (delta >= 0) // the neighbour solution is better than the current one
+    if (delta >= 0) // the neighbour solution is equal or better than the current one
     {
       current_solution = neighbour;
-      current_pen = pen;
+      current_pen = neighbour_pen;
 
       if (current_pen < best_penalization)
       {
@@ -178,7 +178,7 @@ void run_algorithm(VI current_solution, int current_pen, double t, const double 
       if (rndNumber < exp(delta / t))               // acceptance of a worsening move probability
       {
         current_solution = neighbour;
-        current_pen = pen;
+        current_pen = neighbour_pen;
       }
     }
 
