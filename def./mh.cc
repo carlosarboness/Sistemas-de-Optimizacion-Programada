@@ -132,7 +132,7 @@ Step 2: Move – Select a random neighbour from the current solution.
 
 Step 3: Calculate score – calculate the change in performance due to the move made.
 
-Step 4: Choose – Depending on the change in performance, accept or reject the move. The prob of acceptance depending on the current “temperature”.
+Step 4: Choose – Depending on the change in performance, accept or reject the move (*). The prob of acceptance depending on the current “temperature”.
 
 Step 5: Update and repeat – Update the temperature value by lowering it by a factor a.
 
@@ -140,10 +140,10 @@ Go back to Step 2.
 
 The process is done until “Freezing Point” is reached.
 
-Acceptance criteria:
+(*) Acceptance criteria:
 
  - If the performance of neighboring state is better than current state (delta >= 0) - Accept
- - If the performance of neighboring state is worse than current state (delta < 0) - Accept with probability e^{-delta/t} where, t is current temperature and delta is the performance difference between the current state and the neighboring state
+ - If the performance of neighboring state is worse than current state (delta < 0) - Accept with probability e^{delta/t} where, t is current temperature and delta is the performance difference between the current state and the neighboring state
 
  */
 
@@ -153,10 +153,9 @@ void run_algorithm(VI current_solution, int current_pen, double t, const double 
   VI best_solution = current_solution; // saves the better solution
   int best_penalization = current_pen; // saves the better solution penalization
 
-  while (now() - start < 60)
+  while (now() - start < 60) // temination conditions
   {
-    //  select a neighbour from the current solution
-    VI neighbour = select_neighbour(current_solution);
+    VI neighbour = select_neighbour(current_solution); // select random neighbour from current solution
     int neighbour_pen = penalization(neighbour, data); // calculate the penalization of the neighbour
     int delta = current_pen - neighbour_pen;           // difference of performance
 
@@ -186,8 +185,9 @@ void run_algorithm(VI current_solution, int current_pen, double t, const double 
   }
 }
 
-/* Generates an initial random solution for the problem. First, all the classes defined by the problem are put in order, with their respective multiplicity. For example : s = {0, 0, 1, 1, 1, 2, 2, 2, 2, 2}. Then, in order to have a better distributed initial solution a random permutation is done to vector.
-For example : s = {2, 0, 1, 1, 0 ,2, 2, 2, 1, 2} */
+/* Generates an initial random solution for the problem. First, all the classes defined by the problem are put in order, with
+their respective multiplicity. For example : s = {0, 0, 1, 1, 1, 2, 2, 2, 2, 2}. Then, in order to have a better distributed
+initial solution a random permutation is done to vector. For example : s = {2, 0, 1, 1, 0, 2, 2, 2, 1, 2} */
 VI initial_solution(const Data &data)
 {
   VI s;
