@@ -210,7 +210,7 @@ int lower_bound(int i, const VI &cs, const VI &cleft, const VS &st, const Window
 
     // calculate lower bound for each station (each station is independent)
     for (int j = 0; j < M; ++j)
-      lb += lower_bound_station(i, j, cs, cleft, st[j].line, ce[j], ne[j], imp);
+      lb += lower_bound_station(i, j, cs, cleft, st[j].line, w.ce[j], w.ne[j], imp);
   }
   return lb;
 }
@@ -276,7 +276,7 @@ void exhaustive_search_rec(int i, VI &cs, int cp, int &mp, const Window &w, VI &
         int updated_penalization = UPL(imp[class_id], st, w, i + 1 == C);
 
         if (cp + updated_penalization < mp)
-          exhaustive_search_rec(++i, cs, cp + updated_penalization, mp, w, cl, st, imp, update_generator(gen));
+          exhaustive_search_rec(i + 1, cs, cp + updated_penalization, mp, w, cl, st, imp, update_generator(gen));
 
         // Restore all changes done
         restore_stations(st, w.ne);
@@ -326,6 +326,7 @@ void exhaustive_search(const Data &data)
   exhaustive_search_rec(0, current_solution, 0, mp, w, cleft, stations, improvements, generator);
 }
 
+/* Reads the input from the input_file and saves it in data */
 void read_input(ifstream &input_file, Data &data)
 {
   auto &[C, M, K, w, improvements, cleft] = data;
