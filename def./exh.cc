@@ -161,7 +161,7 @@ int ImprovementsLeft(int j, const VI &cleft, const MI &improvements)
 
 /* Calculates the lower bownd for a particular station. The lower bound consist in counting how many improvements are needed in
 that station and distribute them in the best possible way such as the penalization is minimum */
-int lower_bound_station(int i, int j, const VI &cs, const VI &cleft, VI line, int ce_i, int ne_j, const MI &imp)
+int lower_bound_station(int i, int j, const VI &cs, const VI &cleft, VI line, int ce_j, int ne_j, const MI &imp)
 {
   int ones = ImprovementsLeft(j, cleft, imp); // number of improvements (ones) left in that station
   int zeros = (cs.size() - i - 1) - ones;     // number of "not improvements" (zeros) left in that station
@@ -171,14 +171,14 @@ int lower_bound_station(int i, int j, const VI &cs, const VI &cleft, VI line, in
     if (line[z]) // if is needed an improvement
       ++requierements;
 
-  while (zeros > 0 and ones > 0)
+  while (zeros > 0 or ones > 0)
   {
     int substract = i - ne_j + 1; // postion of the vector that gets outside the window when adding a new element
     if (substract >= 0)
       requierements -= line[substract];
 
     // if there aren't zeros left or adding an improvement doesn't add penalization
-    if (ones > 0 and (zeros == 0 or requierements + 1 <= ce_i))
+    if (ones > 0 and (zeros == 0 or requierements + 1 <= ce_j))
     {
       line.push_back(1);
       ++requierements;
@@ -193,7 +193,7 @@ int lower_bound_station(int i, int j, const VI &cs, const VI &cleft, VI line, in
   }
 
   // Returns the penalization of the line created which is the smaller one given the cs.
-  return penalization(line, ce_i, ne_j);
+  return penalization(line, ce_j, ne_j);
 }
 
 /* Returns a lower bound for the current solution cs, this is the sum of the minimum penalization reachable of each station
@@ -205,8 +205,7 @@ int lower_bound(int i, const VI &cs, const VI &cleft, const VS &st, const Window
   int lb = 0;
   if (i >= 0)
   {
-    const auto &[ce, ne] = w;
-    int M = ne.size();
+    int M = w.ne.size();
 
     // calculate lower bound for each station (each station is independent)
     for (int j = 0; j < M; ++j)
