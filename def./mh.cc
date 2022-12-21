@@ -153,7 +153,7 @@ void run_algorithm(VI current_solution, int current_pen, double t, const double 
   VI best_solution = current_solution; // saves the better solution
   int best_penalization = current_pen; // saves the better solution penalization
 
-  while (now() - start < 60) // temination conditions
+  while (true) // temination conditions
   {
     VI neighbour = select_neighbour(current_solution); // select random neighbour from current solution
     int neighbour_pen = penalization(neighbour, data); // calculate the penalization of the neighbour
@@ -198,6 +198,7 @@ VI initial_solution(const Data &data)
       s.push_back(class_id);                            // push_back of the class
 
   random_shuffle(s.begin(), s.end()); // random permutation of the elements in s
+  // shuffle(s.begin(), s.end(), default_random_engine(s.size()))  // --ios(mac) version--
   return s;
 }
 
